@@ -7,5 +7,3 @@ binding = "DB"
 database_name = "tiktok_db"
 database_id = "c8ebfd08-fd0c-437f-99ed-24c720a6229b"
 
-[triggers]
-crons = ["0 0 * * 0"]
