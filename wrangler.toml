@@ -1,5 +1,5 @@
 name = "tiktok-viral"
-main = "worker-FINAL.js"
+main = "worker.js"
 compatibility_date = "2026-06-26"
 
 [[d1_databases]]
