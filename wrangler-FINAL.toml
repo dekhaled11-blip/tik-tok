@@ -5,7 +5,7 @@ compatibility_date = "2026-06-26"
 [[d1_databases]]
 binding = "DB"
 database_name = "tiktok_db"
-database_id = "PUT_YOUR_DATABASE_ID_HERE"
+database_id = "c8ebfd08-fd0c-437f-99ed-24c720a6229b"
 
 [env.production]
 vars = { ENVIRONMENT = "production" }
