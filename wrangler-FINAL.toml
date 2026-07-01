@@ -1,0 +1,17 @@
+name = "tiktok-viral-site"
+main = "worker-FINAL.js"
+compatibility_date = "2026-06-26"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tiktok_db"
+database_id = "PUT_YOUR_DATABASE_ID_HERE"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[env.development]
+vars = { ENVIRONMENT = "development" }
+
+[triggers]
+crons = ["0 0 * * 0"]

@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تريند تيك توك | منصة تبادل المتابعات</title>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <style>
+    :root {
+      --red:        #FE2C55;
+      --red-dim:    rgba(254,44,85,0.12);
+      --red-glow:   rgba(254,44,85,0.35);
+      --gold:       #FFD700;
+      --gold-dim:   rgba(255,215,0,0.12);
+      --silver:     #C0C0C0;
+      --silver-dim: rgba(192,192,192,0.12);
+      --green:      #25D366;
+      --bg:         #0a0a0f;
+      --surface:    #111118;
+      --surface2:   #17171f;
+      --border:     rgba(255,255,255,0.07);
+      --border2:    rgba(255,255,255,0.12);
+      --text:       #f0f0f5;
+      --muted:      #8888a0;
+      --sidebar-w:  230px;
+      --topbar-h:   60px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+    /* ── الشريط العلوي ── */
+    .topbar {
+      position: fixed; top: 0; right: 0; left: 0;
+      height: var(--topbar-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; z-index: 1000;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 14px; }
+    .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 6px; border-radius: 8px; transition: background 0.2s; }
+    .hamburger:hover { background: var(--border); }
+    .hamburger span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: all 0.3s; }
+    .hamburger.open span:nth-child(1) { transform: rotate(45deg) translate(5px,5px); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: rotate(-45deg) translate(5px,-5px); }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; }
+    .logo-icon { width: 34px; height: 34px; background: var(--red); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 0 16px var(--red-glow); }
+    .logo-text span { color: var(--red); }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .timer-pill { background: var(--red-dim); border: 1px solid var(--red); color: var(--red); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .user-pill { background: var(--surface2); border: 1px solid var(--border2); border-radius: 20px; padding: 5px 14px; font-size: 13px; color: var(--green); font-weight: 600; display: none; }
+    .user-pill.show { display: block; }
+
+    /* ── التخطيط ── */
+    .layout { display: flex; padding-top: var(--topbar-h); min-height: 100vh; }
+
+    /* ── القائمة الجانبية ── */
+    .sidebar { position: fixed; top: var(--topbar-h); right: 0; width: var(--sidebar-w); height: calc(100vh - var(--topbar-h)); background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 12px; gap: 4px; overflow-y: auto; z-index: 900; transition: transform 0.3s ease; }
+    .sidebar-section-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; padding: 10px 10px 6px; margin-top: 8px; }
+    .nav-link { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: var(--muted); font-size: 14px; font-weight: 500; transition: all 0.2s; border: 1px solid transparent; user-select: none; }
+    .nav-link:hover { background: var(--surface2); color: var(--text); border-color: var(--border); }
+    .nav-link.active { background: var(--red-dim); color: var(--red); border-color: rgba(254,44,85,0.25); font-weight: 600; }
+    .nav-icon { font-size: 17px; min-width: 20px; text-align: center; }
+    .sidebar-bottom { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 850; }
+    .sidebar-overlay.show { display: block; }
+
+    /* ── المحتوى ── */
+    .main { margin-right: var(--sidebar-w); flex: 1; padding: 28px 32px; max-width: 820px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .page-header { margin-bottom: 24px; }
+    .page-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .page-sub { font-size: 13px; color: var(--muted); }
+    .section-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── بطاقات المتصدرين ── */
+    .leaders-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .leader-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 20px; display: flex; align-items: center; gap: 16px; }
+    .leader-card.gold { border-color: rgba(255,215,0,0.3); }
+    .leader-card.silver { border-color: rgba(192,192,192,0.25); }
+    .leader-medal { font-size: 36px; line-height: 1; }
+    .leader-info { flex: 1; min-width: 0; }
+    .leader-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+    .leader-name { font-size: 16px; font-weight: 700; word-break: break-all; margin-bottom: 4px; }
+    .leader-pts { font-size: 22px; font-weight: 700; }
+    .leader-card.gold .leader-pts { color: var(--gold); }
+    .leader-card.silver .leader-pts { color: var(--silver); }
+
+    /* ── قائمة الـ 5 ── */
+    .targets-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+    .target-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+    .target-card::before { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 3px; background: var(--red); opacity: 0; transition: opacity 0.2s; }
+    .target-card:hover { border-color: var(--border2); transform: translateX(3px); }
+    .target-card:hover::before { opacity: 1; }
+    .target-card.clicked { border-color: rgba(37,211,102,0.4); background: rgba(37,211,102,0.06); }
+    .target-card.clicked::before { background: var(--green); opacity: 1; }
+    .target-rank { width: 30px; height: 30px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--red); flex-shrink: 0; }
+    .target-card.clicked .target-rank { background: rgba(37,211,102,0.1); border-color: var(--green); color: var(--green); }
+    .target-body { flex: 1; min-width: 0; }
+    .target-username { font-size: 15px; font-weight: 600; }
+    .target-badges { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .badge { font-size: 11px; padding: 2px 9px; border-radius: 20px; font-weight: 600; }
+    .badge-gold { background: var(--gold-dim); color: var(--gold); border: 1px solid rgba(255,215,0,0.3); }
+    .badge-silver { background: var(--silver-dim); color: var(--silver); border: 1px solid rgba(192,192,192,0.25); }
+    .badge-new { background: var(--red-dim); color: var(--red); border: 1px solid rgba(254,44,85,0.3); }
+    .target-action { font-size: 18px; color: var(--muted); flex-shrink: 0; }
+
+    /* ── إحصائيات المستخدم ── */
+    .stats-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 20px; margin-bottom: 24px; display: none; }
+    .stats-card.show { display: block; }
+    .stats-user-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .stats-avatar { width: 46px; height: 46px; background: var(--red-dim); border: 2px solid var(--red); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .stats-username { font-size: 17px; font-weight: 700; }
+    .stats-tag { font-size: 12px; color: var(--green); margin-top: 2px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .stat-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; line-height: 1.4; }
+    .stat-value { font-size: 26px; font-weight: 700; }
+    .stat-gold { color: var(--gold); }
+    .stat-silver { color: var(--silver); }
+    .stat-red { color: var(--red); }
+    .share-box { margin-top: 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .share-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .share-row { display: flex; gap: 8px; }
+    .share-input { flex: 1; background: var(--bg); border: 1px solid var(--border2); color: var(--green); border-radius: 8px; padding: 8px 12px; font-size: 12px; direction: ltr; text-align: left; outline: none; }
+    .share-btn { background: var(--red); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity 0.2s; }
+    .share-btn:hover { opacity: 0.85; }
+
+    /* ── بطاقة التحدي ── */
+    .challenge-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 20px; }
+    .challenge-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .challenge-title { font-size: 16px; font-weight: 700; }
+    .challenge-progress-text { font-size: 13px; color: var(--muted); }
+    .progress-bar { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--silver), var(--gold)); border-radius: 3px; transition: width 0.4s ease; }
+    .challenge-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s; }
+    .challenge-item:hover { border-color: var(--border2); }
+    .challenge-item.completed { border-color: rgba(37,211,102,0.35); background: rgba(37,211,102,0.06); }
+    .challenge-name { font-size: 14px; font-weight: 500; }
+    .claim-btn { width: 100%; padding: 13px; background: linear-gradient(135deg, var(--silver) 0%, var(--gold) 100%); border: none; border-radius: 10px; color: #000; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 14px; transition: all 0.2s; }
+    .claim-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(255,215,0,0.25); }
+    .claim-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── نموذج التسجيل ── */
+    .reg-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+    .reg-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .reg-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .form-label { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 6px; display: block; }
+    input[type="text"] { width: 100%; padding: 11px 14px; background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 9px; font-size: 14px; transition: border-color 0.2s; outline: none; margin-bottom: 4px; }
+    input[type="text"]:focus { border-color: var(--red); }
+    input[type="text"][readonly] { border-color: rgba(37,211,102,0.4); color: var(--green); }
+    .hint { font-size: 12px; margin-top: 4px; margin-bottom: 10px; min-height: 16px; }
+    .hint.valid { color: var(--green); }
+    .hint.invalid { color: var(--red); }
+    .cf-turnstile { margin: 14px 0; }
+    .error-msg { color: var(--red); font-size: 13px; padding: 10px 14px; background: var(--red-dim); border: 1px solid rgba(254,44,85,0.25); border-radius: 8px; margin-bottom: 12px; display: none; }
+    .primary-btn { width: 100%; padding: 13px; background: var(--red); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 18px var(--red-glow); }
+    .primary-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    .primary-btn:disabled { background: #333; box-shadow: none; cursor: not-allowed; opacity: 0.6; }
+
+    /* ── الترتيب ── */
+    .leaderboard-table { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .lb-row { display: grid; grid-template-columns: 50px 1fr auto; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    .lb-row:last-child { border-bottom: none; }
+    .lb-row:hover { background: var(--surface2); }
+    .lb-header { background: var(--surface2) !important; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+    .lb-row.top1 { background: rgba(255,215,0,0.05); }
+    .lb-row.top2 { background: rgba(192,192,192,0.04); }
+    .lb-row.top3 { background: rgba(205,127,50,0.04); }
+    .lb-rank { font-size: 15px; font-weight: 700; color: var(--muted); }
+    .lb-row.top1 .lb-rank { color: var(--gold); }
+    .lb-row.top2 .lb-rank { color: var(--silver); }
+    .lb-row.top3 .lb-rank { color: #cd7f32; }
+    .lb-user { font-size: 14px; font-weight: 600; }
+    .lb-pts { font-size: 14px; font-weight: 700; color: var(--gold); }
+
+    /* ── كيف يعمل ── */
+    .how-steps { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+    .how-step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; gap: 16px; align-items: flex-start; }
+    .step-num { width: 36px; height: 36px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: var(--red); flex-shrink: 0; }
+    .step-title { font-size: 15px; font-weight: 700; margin-bottom: 5px; }
+    .step-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .points-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .points-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+    .points-card.gold { border-color: rgba(255,215,0,0.3); }
+    .points-card.silver { border-color: rgba(192,192,192,0.25); }
+    .points-emoji { font-size: 34px; margin-bottom: 10px; }
+    .points-type { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .points-card.gold .points-type { color: var(--gold); }
+    .points-card.silver .points-type { color: var(--silver); }
+    .points-how { font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+    /* ── الأسئلة الشائعة ── */
+    .faq-list { display: flex; flex-direction: column; gap: 10px; }
+    .faq-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .faq-q { padding: 16px 18px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
+    .faq-q:hover { background: var(--surface2); }
+    .faq-arrow { color: var(--muted); transition: transform 0.3s; font-size: 13px; }
+    .faq-item.open .faq-arrow { transform: rotate(180deg); }
+    .faq-a { display: none; padding: 14px 18px 16px; font-size: 13px; color: var(--muted); line-height: 1.7; border-top: 1px solid var(--border); }
+    .faq-item.open .faq-a { display: block; }
+
+    /* ── Empty state ── */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); border: 2px dashed var(--border2); border-radius: 14px; margin-bottom: 20px; }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-text { font-size: 14px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hamburger { display: flex; }
+      .sidebar { transform: translateX(100%); width: 260px; box-shadow: -8px 0 32px rgba(0,0,0,0.5); }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-right: 0; padding: 20px 16px; }
+      .leaders-row { gap: 10px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .stats-grid .stat-box:last-child { grid-column: span 2; }
+      .points-cards { grid-template-columns: 1fr; }
+      .timer-pill { display: none; }
+    }
+    @media (max-width: 420px) {
+      .leaders-row { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .stats-grid .stat-box:last-child { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-right">
+    <div class="hamburger" id="hamburger" onclick="toggleSidebar()">
+      <span></span><span></span><span></span>
+    </div>
+    <div class="logo">
+      <div class="logo-icon">🎵</div>
+      <div class="logo-text">تريند <span>تيك توك</span></div>
+    </div>
+  </div>
+  <div class="topbar-left">
+    <div class="timer-pill" id="reset-timer">⏳ جاري...</div>
+    <div class="user-pill" id="user-pill">@-</div>
+  </div>
+</header>
+
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-section-label">القائمة</div>
+    <div class="nav-link active" id="nav-home" onclick="showPage('home')">
+      <span class="nav-icon">🏠</span> الرئيسية
+    </div>
+    <div class="nav-link" id="nav-challenge" onclick="showPage('challenge')">
+      <span class="nav-icon">🎯</span> تحديي الأسبوعي
+    </div>
+    <div class="nav-link" id="nav-leaderboard" onclick="showPage('leaderboard')">
+      <span class="nav-icon">🏆</span> الترتيب
+    </div>
+    <div class="sidebar-section-label">معلومات</div>
+    <div class="nav-link" id="nav-how" onclick="showPage('how')">
+      <span class="nav-icon">📖</span> كيف يعمل الموقع
+    </div>
+    <div class="nav-link" id="nav-faq" onclick="showPage('faq')">
+      <span class="nav-icon">❓</span> الأسئلة الشائعة
+    </div>
+    <div class="sidebar-bottom">
+      <div class="nav-link" style="font-size:11px;cursor:default;">
+        <span class="nav-icon">⚡</span> يتجدد كل أحد
+      </div>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- ══ الرئيسية ══ -->
+    <div class="page active" id="page-home">
+      <div class="page-header">
+        <div class="page-title">منصة تبادل المتابعات 🎵</div>
+        <div class="page-sub">تابع آخرين واحصل على متابعات حقيقية على TikTok</div>
+      </div>
+
+      <div class="leaders-row">
+        <div class="leader-card gold">
+          <div class="leader-medal">🥇</div>
+          <div class="leader-info">
+            <div class="leader-label">متصدر الذهب</div>
+            <div class="leader-name" id="top-gold-name">-</div>
+            <div class="leader-pts" id="top-gold-points">0 💎</div>
+          </div>
+        </div>
+        <div class="leader-card silver">
+          <div class="leader-medal">🥈</div>
+          <div class="leader-info">
+            <div class="leader-label">متصدر الفضة</div>
+            <div class="leader-name" id="top-silver-name">-</div>
+            <div class="leader-pts" id="top-silver-points">0 ✨</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-card" id="user-stats">
+        <div class="stats-user-header">
+          <div class="stats-avatar">🎵</div>
+          <div>
+            <div class="stats-username" id="current-username">-</div>
+            <div class="stats-tag">✅ مسجل هذا الأسبوع</div>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">ذهبية هذا الأسبوع</div>
+            <div class="stat-value stat-gold" id="my-gold-weekly">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">فضية هذا الأسبوع</div>
+            <div class="stat-value stat-silver" id="my-silver-weekly">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">مجموعك الأسبوعي</div>
+            <div class="stat-value stat-red" id="my-total-weekly">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">ذهبية كل الوقت</div>
+            <div class="stat-value stat-gold" id="my-gold-total">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">فضية كل الوقت</div>
+            <div class="stat-value stat-silver" id="my-silver-total">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">مجموع كل الوقت</div>
+            <div class="stat-value stat-red" id="my-total-all-time">0</div>
+          </div>
+        </div>
+        <div class="share-box" id="share-box" style="display:none;">
+          <div class="share-label">🔗 رابط إحالتك — شاركه واكسب نقاط ذهبية</div>
+          <div class="share-row">
+            <input type="text" class="share-input" id="share-link" readonly>
+            <button class="share-btn" onclick="copyLink()">نسخ</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">👥 تابعهم الآن واكسب مكانك</div>
+      <div class="targets-list" id="targets-list"></div>
+
+      <div class="reg-card" id="reg-form" style="display:none;">
+        <div class="reg-title">✍️ سجّل حسابك مجاناً</div>
+        <div class="reg-sub">أضف اسم حسابك على TikTok لتظهر في قائمة المتابعات</div>
+        <label class="form-label">اسم المستخدم على TikTok</label>
+        <input type="text" id="username" placeholder="مثال: keke_0990" maxlength="24" autocomplete="off" spellcheck="false">
+        <div class="hint" id="input-hint"></div>
+        <div class="cf-turnstile" data-sitekey="YOUR_SITE_KEY_HERE" data-callback="onTurnstileSuccess"></div>
+        <div class="error-msg" id="error-msg"></div>
+        <button class="primary-btn" id="reg-btn" onclick="register()" disabled>✅ انضم واجمع النقاط</button>
+      </div>
+
+      <div class="reg-card" id="already-registered" style="display:none;">
+        <div class="reg-title" style="color:var(--green);">✅ أنت مسجل!</div>
+        <div class="reg-sub">شارك رابط إحالتك لكسب نقاط ذهبية</div>
+        <div class="share-row">
+          <input type="text" class="share-input" id="existing-link" readonly>
+          <button class="share-btn" onclick="copyExistingLink()">نسخ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ تحديي ══ -->
+    <div class="page" id="page-challenge">
+      <div class="page-header">
+        <div class="page-title">🎯 تحديي الأسبوعي</div>
+        <div class="page-sub">تابع الأشخاص الثلاثة واستلم نقاطك الفضية</div>
+      </div>
+      <div id="challenge-logged-in" style="display:none;">
+        <div class="challenge-card">
+          <div class="challenge-header">
+            <div class="challenge-title">التحدي الحالي</div>
+            <div class="challenge-progress-text" id="challenge-text">جاري التحميل...</div>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="challenge-fill" style="width:0%"></div>
+          </div>
+          <div id="challenge-targets"></div>
+          <button class="claim-btn" id="claim-button" disabled onclick="claimPoints()">
+            📦 استلم 5 نقاط فضية ✨
+          </button>
+        </div>
+      </div>
+      <div id="challenge-guest" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">🔒</div>
+          <div class="empty-text">سجّل أولاً من الصفحة الرئيسية للوصول للتحدي</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ الترتيب ══ -->
+    <div class="page" id="page-leaderboard">
+      <div class="page-header">
+        <div class="page-title">🏆 ترتيب هذا الأسبوع</div>
+        <div class="page-sub">أعلى 10 في نقاط هذا الأسبوع</div>
+      </div>
+      <div class="leaderboard-table" id="lb-table">
+        <div class="lb-row lb-header">
+          <div>#</div><div>المستخدم</div><div>النقاط</div>
+        </div>
+        <div style="padding:30px;text-align:center;color:var(--muted);font-size:14px;">⏳ جاري التحميل...</div>
+      </div>
+    </div>
+
+    <!-- ══ كيف يعمل ══ -->
+    <div class="page" id="page-how">
+      <div class="page-header">
+        <div class="page-title">📖 كيف يعمل الموقع</div>
+        <div class="page-sub">دليل سريع لفهم المنصة</div>
+      </div>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="step-num">1</div>
+          <div><div class="step-title">سجّل حسابك</div><div class="step-desc">أدخل اسم حسابك على TikTok. مجاني تماماً وبدون كلمة مرور.</div></div>
+        </div>
+        <div class="how-step">
+          <div class="step-num">2</div>
+          <div><div class="step-title">تابع الأشخاص في القائمة</div><div class="step-desc">الصفحة الرئيسية تعرض لك 5 حسابات. اضغط عليها للانتقال لـ TikTok ومتابعتهم.</div></div>
+        </div>
+        <div class="how-step">
+          <div class="step-num">3</div>
+          <div><div class="step-title">أكمل التحدي الأسبوعي</div><div class="step-desc">تحدي خاص بك كل أسبوع — تابع 3 أشخاص واستلم 5 نقاط فضية.</div></div>
+        </div>
+        <div class="how-step">
+          <div class="step-num">4</div>
+          <div><div class="step-title">شارك رابطك واكسب ذهبية</div><div class="step-desc">كل شخص يسجل عبر رابط إحالتك = نقطة ذهبية لك تلقائياً.</div></div>
+        </div>
+        <div class="how-step">
+          <div class="step-num">5</div>
+          <div><div class="step-title">تصعد في الترتيب</div><div class="step-desc">كل أحد يتجدد كل شيء — الترتيب يُحفظ في السجل والنقاط تبدأ من جديد.</div></div>
+        </div>
+      </div>
+      <div class="section-title">💰 طريقة حساب النقاط</div>
+      <div class="points-cards">
+        <div class="points-card gold">
+          <div class="points-emoji">💎</div>
+          <div class="points-type">نقاط ذهبية</div>
+          <div class="points-how">تُكسب عندما يسجل شخص عبر رابط إحالتك.<br>لا حد أقصى — كلما دعوت أكثر كسبت أكثر.</div>
+        </div>
+        <div class="points-card silver">
+          <div class="points-emoji">✨</div>
+          <div class="points-type">نقاط فضية</div>
+          <div class="points-how">تُكسب عند إكمال التحدي الأسبوعي.<br>+5 نقاط لكل تحدٍ تكمله.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ الأسئلة الشائعة ══ -->
+    <div class="page" id="page-faq">
+      <div class="page-header">
+        <div class="page-title">❓ الأسئلة الشائعة</div>
+        <div class="page-sub">إجابات على أكثر الأسئلة تكراراً</div>
+      </div>
+      <div class="faq-list">
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">هل التسجيل مجاني؟ <span class="faq-arrow">▼</span></div>
+          <div class="faq-a">نعم، التسجيل مجاني بالكامل ولا يتطلب كلمة مرور أو بريد إلكتروني.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">هل يمكن لأي شخص رؤية معلوماتي؟ <span class="faq-arrow">▼</span></div>
+          <div class="faq-a">اسم حسابك على TikTok فقط هو الذي يظهر للآخرين. لا يتم جمع أي معلومات خاصة أخرى.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">متى تُصفّر النقاط؟ <span class="faq-arrow">▼</span></div>
+          <div class="faq-a">النقاط الأسبوعية تُصفّر كل أحد منتصف الليل (00:00 UTC). نقاطك الإجمالية (كل الوقت) لا تُصفّر أبداً.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">كيف أعرف أنهم سيتابعونني فعلاً؟ <span class="faq-arrow">▼</span></div>
+          <div class="faq-a">المنصة تعمل على أساس الثقة المتبادلة. من لا يدخل الموقع لأكثر من 7 أيام يُحذف من القائمة تلقائياً.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">ماذا تعني نقاط الترتيب؟ <span class="faq-arrow">▼</span></div>
+          <div class="faq-a">الترتيب = نقاط ذهبية + (نقاط فضية × 5). يعني الفضية تساوي 5 أضعاف الذهبية في الترتيب.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">لماذا لم أظهر في قائمة المتابعات؟ <span class="faq-arrow">▼</span></div>
+          <div class="faq-a">القائمة تختار 5 أشخاص بخوارزمية ذكية. كلما جمعت نقاطاً أكثر، كلما زادت احتمالية ظهورك.</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const WORKER_URL = "https://YOUR_WORKER_URL.workers.dev";
+  let currentUsername = null;
+  let turnstileToken  = null;
+
+  /* التنقل */
+  function showPage(key) {
+    ['home','challenge','leaderboard','how','faq'].forEach(k => {
+      document.getElementById('page-' + k).classList.toggle('active', k === key);
+      document.getElementById('nav-'  + k).classList.toggle('active', k === key);
+    });
+    if (key === 'leaderboard') loadLeaderboard();
+    if (window.innerWidth <= 768) closeSidebar();
+  }
+
+  /* Sidebar */
+  function toggleSidebar() {
+    const s = document.getElementById('sidebar');
+    const o = document.getElementById('sidebar-overlay');
+    const h = document.getElementById('hamburger');
+    const open = s.classList.toggle('open');
+    o.classList.toggle('show', open);
+    h.classList.toggle('open', open);
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('show');
+    document.getElementById('hamburger').classList.remove('open');
+  }
+
+  /* Turnstile */
+  function onTurnstileSuccess(token) {
+    turnstileToken = token;
+    document.getElementById('reg-btn').disabled = false;
+  }
+
+  /* عداد */
+  function startCountdown(d, h) {
+    const el = document.getElementById('reset-timer');
+    let ms = (d * 24 + h) * 60 * 60 * 1000;
+    function upd() {
+      if (ms <= 0) { localStorage.removeItem('myUsername'); location.reload(); return; }
+      const d2 = Math.floor(ms / 86400000);
+      const h2 = Math.floor((ms % 86400000) / 3600000);
+      const m2 = Math.floor((ms % 3600000) / 60000);
+      el.innerText = `⏳ يتجدد خلال: ${d2}ي ${h2}س ${m2}د`;
+      ms -= 1000;
+    }
+    upd(); setInterval(upd, 1000);
+  }
+
+  /* التحقق من الاسم */
+  function sanitize(v) { return v.toLowerCase().replace(/[^a-z0-9_.]/g,'').replace(/^\.+|\.{2,}|\.$/g,''); }
+  function validate(v) {
+    const c = sanitize(v);
+    if (c.length < 2 || c.length > 24) return 'الطول يجب أن يكون 2-24 حرف';
+    if (!/[a-z]/.test(c)) return 'يجب أن يبدأ بحرف';
+    return null;
+  }
+
+  let checkTimer = null;
+  document.getElementById('username').addEventListener('input', e => {
+    const hint = document.getElementById('input-hint');
+    hint.className = 'hint'; hint.innerText = '';
+    clearTimeout(checkTimer);
+    if (!e.target.value) return;
+    const err = validate(e.target.value);
+    if (err) { hint.className = 'hint invalid'; hint.innerText = err; return; }
+    checkTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${WORKER_URL}/api/check?username=${encodeURIComponent(sanitize(e.target.value))}`);
+        const d   = await res.json();
+        hint.className = d.exists ? 'hint invalid' : 'hint valid';
+        hint.innerText = d.exists ? '✗ مستخدم بالفعل' : '✓ متاح';
+      } catch { hint.className = 'hint invalid'; hint.innerText = 'فشل التحقق'; }
+    }, 500);
+  });
+
+  /* FAQ */
+  function toggleFaq(el) { el.closest('.faq-item').classList.toggle('open'); }
+
+  /* بناء رابط الإحالة */
+  function buildRefLink(u) { return window.location.origin + window.location.pathname + '?ref=' + u; }
+
+  /* pill الشريط العلوي */
+  function setUserPill(u) {
+    const p = document.getElementById('user-pill');
+    p.innerText = '@' + u; p.classList.add('show');
+  }
+
+  /* التهيئة */
+  async function init() {
+    const saved = localStorage.getItem('myUsername');
+    try {
+      const res  = await fetch(`${WORKER_URL}/api/targets`);
+      const data = await res.json();
+      startCountdown(data.daysLeft || 0, data.hoursLeft || 0);
+
+      if (data.topGold) {
+        document.getElementById('top-gold-name').innerText   = '@' + data.topGold.username;
+        document.getElementById('top-gold-points').innerText = data.topGold.gold_points_weekly + ' 💎';
+      }
+      if (data.topSilver) {
+        document.getElementById('top-silver-name').innerText   = '@' + data.topSilver.username;
+        document.getElementById('top-silver-points').innerText = data.topSilver.silver_points_weekly + ' ✨';
+      }
+
+      if (saved) {
+        currentUsername = saved;
+        setUserPill(saved);
+        document.getElementById('user-stats').classList.add('show');
+        document.getElementById('share-box').style.display   = 'block';
+        document.getElementById('share-link').value          = buildRefLink(saved);
+        document.getElementById('already-registered').style.display = 'block';
+        document.getElementById('existing-link').value       = buildRefLink(saved);
+        document.getElementById('challenge-logged-in').style.display = 'block';
+        document.getElementById('challenge-guest').style.display     = 'none';
+        await loadUserStats(saved);
+        await loadChallenge(saved);
+      } else {
+        document.getElementById('reg-form').style.display       = 'block';
+        document.getElementById('challenge-guest').style.display = 'block';
+      }
+
+      renderTargets(data);
+    } catch(e) {
+      console.error('Init error:', e);
+      document.getElementById('reset-timer').innerText = '⚠️ فشل الاتصال';
+      if (saved) {
+        document.getElementById('already-registered').style.display = 'block';
+        document.getElementById('existing-link').value = buildRefLink(saved);
+      } else {
+        document.getElementById('reg-form').style.display = 'block';
+      }
+      document.getElementById('challenge-guest').style.display = saved ? 'none' : 'block';
+      if (saved) document.getElementById('challenge-logged-in').style.display = 'block';
+    }
+  }
+
+  /* رسم الـ 5 */
+  function renderTargets(data) {
+    const list = document.getElementById('targets-list');
+    list.innerHTML = '';
+    if (!data.targets || data.targets.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">🌟</div><div class="empty-text">كن أول من يسجل!</div></div>`;
+      return;
+    }
+    data.targets.forEach((u, i) => {
+      const card = document.createElement('div');
+      card.className = 'target-card';
+      let badges = '';
+      if (i === 0) badges = `<span class="badge badge-gold">${u.gold_points_weekly} 💎</span><span class="badge badge-silver">${u.silver_points_weekly} ✨</span>`;
+      else if (i === 1) badges = `<span class="badge badge-silver">${u.silver_points_weekly} ✨</span><span class="badge badge-gold">${u.gold_points_weekly} 💎</span>`;
+      else if (i === 4) badges = `<span class="badge badge-new">🆕 جديد</span>`;
+      else badges = `<span class="badge badge-silver">${u.silver_points_weekly} ✨</span>`;
+      card.innerHTML = `
+        <div class="target-rank">${i+1}</div>
+        <div class="target-body">
+          <div class="target-username">@${u.username}</div>
+          <div class="target-badges">${badges}</div>
+        </div>
+        <div class="target-action">↗</div>`;
+      card.onclick = () => {
+        if (card.classList.contains('clicked')) return;
+        card.classList.add('clicked');
+        card.querySelector('.target-rank').innerText = '✓';
+        card.querySelector('.target-action').innerText = '✓';
+        window.open(`https://www.tiktok.com/@${u.username}`, '_blank');
+      };
+      list.appendChild(card);
+    });
+  }
+
+  /* إحصائيات */
+  async function loadUserStats(username) {
+    try {
+      const res  = await fetch(`${WORKER_URL}/api/user-stats?username=${encodeURIComponent(username)}`);
+      const data = await res.json();
+      if (!data.username) return;
+      document.getElementById('current-username').innerText    = '@' + data.username;
+      document.getElementById('my-gold-weekly').innerText      = data.goldPointsWeekly;
+      document.getElementById('my-silver-weekly').innerText    = data.silverPointsWeekly;
+      document.getElementById('my-total-weekly').innerText     = data.totalScoreWeekly;
+      document.getElementById('my-gold-total').innerText       = data.totalGoldAllTime;
+      document.getElementById('my-silver-total').innerText     = data.totalSilverAllTime;
+      document.getElementById('my-total-all-time').innerText   = data.totalScoreAllTime;
+    } catch(e) { console.error('Stats error:', e); }
+  }
+
+  /* التحدي */
+  async function loadChallenge(username) {
+    try {
+      const res  = await fetch(`${WORKER_URL}/api/challenge?username=${encodeURIComponent(username)}`);
+      const data = await res.json();
+      renderChallenge(data);
+    } catch(e) { console.error('Challenge error:', e); }
+  }
+
+  function renderChallenge(ch) {
+    const cont = document.getElementById('challenge-targets');
+    const txt  = document.getElementById('challenge-text');
+    const fill = document.getElementById('challenge-fill');
+    const btn  = document.getElementById('claim-button');
+    cont.innerHTML = '';
+    const comp = ch.completed || [];
+    const tgts = ch.targets   || [];
+    txt.innerText = `${comp.length} / ${tgts.length} مكتملة`;
+    fill.style.width = ((comp.length / (tgts.length || 1)) * 100) + '%';
+    if (tgts.length === 0) {
+      cont.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:10px 0;">لا يوجد تحدي حالياً</div>';
+      btn.disabled = true; return;
+    }
+    tgts.forEach(t => {
+      const done = comp.includes(t);
+      const item = document.createElement('div');
+      item.className = 'challenge-item' + (done ? ' completed' : '');
+      item.innerHTML = `<div class="challenge-name">@${t}</div><div>${done ? '✅' : '○'}</div>`;
+      item.onclick = async () => {
+        if (done) return;
+        window.open(`https://www.tiktok.com/@${t}`, '_blank');
+        setTimeout(async () => {
+          try {
+            await fetch(`${WORKER_URL}/api/challenge/mark`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: currentUsername, targetUsername: t })
+            });
+            await loadChallenge(currentUsername);
+          } catch(e) { console.error('Mark error:', e); }
+        }, 7000);
+      };
+      cont.appendChild(item);
+    });
+    btn.disabled = comp.length !== tgts.length || ch.claimed;
+    btn.innerText = ch.claimed ? '✅ تم الاستلام!' : '📦 استلم 5 نقاط فضية ✨';
+  }
+
+  /* استلام */
+  async function claimPoints() {
+    if (!currentUsername) return;
+    const btn = document.getElementById('claim-button');
+    btn.disabled = true; btn.innerText = '⏳ جاري...';
+    try {
+      const res  = await fetch(`${WORKER_URL}/api/challenge/claim`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: currentUsername })
+      });
+      const data = await res.json();
+      if (data.success) {
+        btn.innerText = '🎉 ' + data.message;
+        await loadUserStats(currentUsername);
+        setTimeout(() => loadChallenge(currentUsername), 1000);
+      } else {
+        btn.disabled = false; btn.innerText = '📦 استلم 5 نقاط فضية ✨';
+        alert('❌ ' + (data.error || 'خطأ'));
+      }
+    } catch(e) {
+      btn.disabled = false; btn.innerText = '📦 استلم 5 نقاط فضية ✨';
+      alert('❌ فشل الاتصال');
+    }
+  }
+
+  /* التسجيل */
+  async function register() {
+    const inp = document.getElementById('username');
+    const btn = document.getElementById('reg-btn');
+    const err = document.getElementById('error-msg');
+    err.style.display = 'none';
+    const username = sanitize(inp.value.trim());
+    const vErr = validate(inp.value.trim());
+    if (vErr) { err.innerText = vErr; err.style.display = 'block'; return; }
+    if (!turnstileToken) { err.innerText = 'أكمل التحقق أولاً'; err.style.display = 'block'; return; }
+    btn.disabled = true; btn.innerText = '⏳ جاري التسجيل...';
+    try {
+      const ref  = new URLSearchParams(window.location.search).get('ref') || '';
+      const res  = await fetch(`${WORKER_URL}/api/register`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, ref, turnstileToken })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        currentUsername = username;
+        localStorage.setItem('myUsername', username);
+        setUserPill(username);
+        document.getElementById('reg-form').style.display            = 'none';
+        document.getElementById('user-stats').classList.add('show');
+        document.getElementById('share-box').style.display           = 'block';
+        document.getElementById('share-link').value                  = buildRefLink(username);
+        document.getElementById('already-registered').style.display  = 'block';
+        document.getElementById('existing-link').value               = buildRefLink(username);
+        document.getElementById('challenge-logged-in').style.display = 'block';
+        document.getElementById('challenge-guest').style.display     = 'none';
+        await loadUserStats(username);
+        await loadChallenge(username);
+      } else {
+        err.innerText = data.error || 'خطأ في التسجيل';
+        err.style.display = 'block';
+        if (window.turnstile) turnstile.reset();
+        turnstileToken = null; btn.disabled = true;
+        btn.innerText = '✅ انضم واجمع النقاط';
+      }
+    } catch(e) {
+      err.innerText = 'فشل الاتصال بالخادم'; err.style.display = 'block';
+      btn.disabled = true; btn.innerText = '✅ انضم واجمع النقاط';
+    }
+  }
+
+  /* الترتيب */
+  async function loadLeaderboard() {
+    const table = document.getElementById('lb-table');
+    try {
+      const res  = await fetch(`${WORKER_URL}/api/leaderboard?limit=10`);
+      const data = await res.json();
+      const medals = ['🥇','🥈','🥉'];
+      const tops   = ['top1','top2','top3'];
+      let html = `<div class="lb-row lb-header"><div>#</div><div>المستخدم</div><div>النقاط</div></div>`;
+      if (!data.leaderboard || data.leaderboard.length === 0) {
+        html += `<div style="padding:30px;text-align:center;color:var(--muted);font-size:14px;">لا يوجد ترتيب بعد</div>`;
+      } else {
+        data.leaderboard.forEach((u, i) => {
+          const pts = u.gold_points + (u.silver_points * 5);
+          html += `<div class="lb-row ${tops[i]||''}">
+            <div class="lb-rank">${medals[i]||(i+1)}</div>
+            <div class="lb-user">@${u.username}</div>
+            <div class="lb-pts">${pts}</div></div>`;
+        });
+      }
+      table.innerHTML = html;
+    } catch(e) {
+      table.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">⚠️ فشل تحميل الترتيب</div>`;
+    }
+  }
+
+  /* النسخ */
+  async function copyLink() { await copyText(document.getElementById('share-link').value); }
+  async function copyExistingLink() { await copyText(document.getElementById('existing-link').value); }
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+      else { const t = document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
+      alert('✅ تم النسخ!');
+    } catch { alert('فشل النسخ'); }
+  }
+
+  init();
+</script>
+</body>
+</html>
