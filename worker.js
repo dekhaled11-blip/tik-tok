@@ -26,11 +26,13 @@ export default {
     const headers = {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
       'Cache-Control': 'no-store'
     };
 
     // معالجة CORS preflight
-    if (request.method === 'OPTIONS') return new Response(null, { headers });
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
 
     // ─────────────────────────────────────────────────────────────────────
     // دالة: تنظيف والتحقق من اسم المستخدم
