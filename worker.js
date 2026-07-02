@@ -118,6 +118,10 @@ export default {
       try {
         await checkAndDeleteInactiveUsers(env);
 
+        // رقم الأسبوع الحالي — تُستخدم لقراءة نقاط هذا الأسبوع فقط من weekly_leaderboard
+        // (بدلاً من عمودي users.gold_points_weekly/silver_points_weekly القديمين)
+        const currentWeek = getCurrentWeek();
+
         // عد المستخدمين النشطين
         const totalCount = await env.DB.prepare(
           'SELECT COUNT(*) as total FROM users WHERE is_deleted = 0'
@@ -154,23 +158,31 @@ export default {
           if (used.size >= total) return null;
           const { clause, params } = buildNotIn([...used]);
           return await env.DB.prepare(
-            `SELECT username, gold_points_weekly, silver_points_weekly
-             FROM users
-             WHERE is_deleted = 0 AND ${clause}
+            `SELECT u.username,
+                    COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                    COALESCE(w.silver_points, 0) AS silver_points_weekly
+             FROM users u
+             LEFT JOIN weekly_leaderboard w
+               ON w.username = u.username AND w.week_number = ?
+             WHERE u.is_deleted = 0 AND ${clause}
              ORDER BY RANDOM()
              LIMIT 1`
-          ).bind(...params).first();
+          ).bind(currentWeek, ...params).first();
         }
 
         // ── #1: أعلى ذهبية ───────────────────────────────────────────────────
         // لو الكل عنده 0 ذهبية → نأخذ عشوائياً (RANDOM() كـ tiebreaker)
         let rank1User = await env.DB.prepare(
-          `SELECT username, gold_points_weekly, silver_points_weekly
-           FROM users
-           WHERE is_deleted = 0
+          `SELECT u.username,
+                  COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                  COALESCE(w.silver_points, 0) AS silver_points_weekly
+           FROM users u
+           LEFT JOIN weekly_leaderboard w
+             ON w.username = u.username AND w.week_number = ?
+           WHERE u.is_deleted = 0
            ORDER BY gold_points_weekly DESC, RANDOM()
            LIMIT 1`
-        ).first();
+        ).bind(currentWeek).first();
 
         if (rank1User) {
           finalTargets.push(rank1User);
@@ -183,12 +195,16 @@ export default {
         if (used.size < total) {
           const { clause, params } = buildNotIn([...used]);
           rank2User = await env.DB.prepare(
-            `SELECT username, gold_points_weekly, silver_points_weekly
-             FROM users
-             WHERE is_deleted = 0 AND ${clause}
+            `SELECT u.username,
+                    COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                    COALESCE(w.silver_points, 0) AS silver_points_weekly
+             FROM users u
+             LEFT JOIN weekly_leaderboard w
+               ON w.username = u.username AND w.week_number = ?
+             WHERE u.is_deleted = 0 AND ${clause}
              ORDER BY silver_points_weekly DESC, RANDOM()
              LIMIT 1`
-          ).bind(...params).first();
+          ).bind(currentWeek, ...params).first();
         }
 
         if (rank2User) {
@@ -209,12 +225,16 @@ export default {
           const { clause, params } = buildNotIn([...used]);
 
           rank3User = await env.DB.prepare(
-            `SELECT username, gold_points_weekly, silver_points_weekly
-             FROM users
-             WHERE is_deleted = 0 AND ${clause}
+            `SELECT u.username,
+                    COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                    COALESCE(w.silver_points, 0) AS silver_points_weekly
+             FROM users u
+             LEFT JOIN weekly_leaderboard w
+               ON w.username = u.username AND w.week_number = ?
+             WHERE u.is_deleted = 0 AND ${clause}
              ORDER BY silver_points_weekly DESC
              LIMIT 1 OFFSET ?`
-          ).bind(...params, offset25).first();
+          ).bind(currentWeek, ...params, offset25).first();
 
           // fallback: لو OFFSET خرج فارغاً → عشوائي من المتاحين
           if (!rank3User) rank3User = await getRandomFallback();
@@ -240,12 +260,16 @@ export default {
           if (zoneSize > 0) {
             const offset75 = zone25Count + Math.floor(Math.random() * zoneSize);
             rank4User = await env.DB.prepare(
-              `SELECT username, gold_points_weekly, silver_points_weekly
-               FROM users
-               WHERE is_deleted = 0 AND ${clause}
+              `SELECT u.username,
+                      COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                      COALESCE(w.silver_points, 0) AS silver_points_weekly
+               FROM users u
+               LEFT JOIN weekly_leaderboard w
+                 ON w.username = u.username AND w.week_number = ?
+               WHERE u.is_deleted = 0 AND ${clause}
                ORDER BY silver_points_weekly DESC
                LIMIT 1 OFFSET ?`
-            ).bind(...params, offset75).first();
+            ).bind(currentWeek, ...params, offset75).first();
           }
 
           // fallback: لو المنطقة فارغة أو OFFSET خرج null → عشوائي
@@ -264,12 +288,16 @@ export default {
         if (used.size < total) {
           const { clause, params } = buildNotIn([...used]);
           rank5User = await env.DB.prepare(
-            `SELECT username, gold_points_weekly, silver_points_weekly
-             FROM users
-             WHERE is_deleted = 0 AND ${clause}
-             ORDER BY created_at DESC
+            `SELECT u.username,
+                    COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                    COALESCE(w.silver_points, 0) AS silver_points_weekly
+             FROM users u
+             LEFT JOIN weekly_leaderboard w
+               ON w.username = u.username AND w.week_number = ?
+             WHERE u.is_deleted = 0 AND ${clause}
+             ORDER BY u.created_at DESC
              LIMIT 1`
-          ).bind(...params).first();
+          ).bind(currentWeek, ...params).first();
 
           // fallback: لو أحدث مستخدم مسبقاً مستخدم → عشوائي
           if (!rank5User) rank5User = await getRandomFallback();
@@ -318,6 +346,10 @@ export default {
           return new Response(JSON.stringify({ error: 'خطأ في الإعدادات' }), { status: 500, headers });
 
         const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+        // رقم الأسبوع الحالي — يُستخدم لتسجيل نقاط الإحالة في weekly_leaderboard
+        // (بدلاً من عمود users.gold_points_weekly القديم الذي كان يحتاج تصفيراً أسبوعياً)
+        const currentWeek = getCurrentWeek();
 
         // التحقق من Turnstile مع Cloudflare
         try {
@@ -370,9 +402,18 @@ export default {
             env.DB.prepare(
               'UPDATE users SET is_deleted = 0, last_active = CURRENT_TIMESTAMP, referred_by = ? WHERE username = ?'
             ).bind(confirmedRef, clean),
+            // المجموع الكلي (all-time) يبقى في جدول users كما هو — لا يُصفَّر أبداً
             ...(confirmedRef ? [env.DB.prepare(
-              'UPDATE users SET gold_points_weekly = gold_points_weekly + 1, total_gold_all_time = total_gold_all_time + 1 WHERE username = ?'
-            ).bind(confirmedRef)] : [])
+              'UPDATE users SET total_gold_all_time = total_gold_all_time + 1 WHERE username = ?'
+            ).bind(confirmedRef)] : []),
+            // نقطة الأسبوع الحالي تُكتب في weekly_leaderboard فقط —
+            // صف جديد لو أول نقطة هذا الأسبوع، أو تحديث لو موجود بالفعل
+            // لا حاجة لأي "تصفير" لاحقاً لأن كل أسبوع له صف مستقل تلقائياً
+            ...(confirmedRef ? [env.DB.prepare(
+              `INSERT INTO weekly_leaderboard (username, week_number, gold_points, silver_points)
+               VALUES (?, ?, 1, 0)
+               ON CONFLICT(username, week_number) DO UPDATE SET gold_points = gold_points + 1`
+            ).bind(confirmedRef, currentWeek)] : [])
           ]);
 
           return new Response(JSON.stringify({ success: true, restored: true }), { headers });
@@ -400,16 +441,21 @@ export default {
           }
         }
 
-        const currentWeek = getCurrentWeek();
-
         // إدخال المستخدم الجديد + منح نقطة للمُحيل
         await env.DB.batch([
           env.DB.prepare(
             'INSERT INTO users (username, referred_by, ip, is_deleted) VALUES (?, ?, ?, 0)'
           ).bind(clean, confirmedRef, ip),
+          // المجموع الكلي (all-time) في جدول users — لا يُصفَّر أبداً
           ...(confirmedRef ? [env.DB.prepare(
-            'UPDATE users SET gold_points_weekly = gold_points_weekly + 1, total_gold_all_time = total_gold_all_time + 1 WHERE username = ?'
-          ).bind(confirmedRef)] : [])
+            'UPDATE users SET total_gold_all_time = total_gold_all_time + 1 WHERE username = ?'
+          ).bind(confirmedRef)] : []),
+          // نقطة الأسبوع الحالي في weekly_leaderboard — بدون أي حاجة للتصفير لاحقاً
+          ...(confirmedRef ? [env.DB.prepare(
+            `INSERT INTO weekly_leaderboard (username, week_number, gold_points, silver_points)
+             VALUES (?, ?, 1, 0)
+             ON CONFLICT(username, week_number) DO UPDATE SET gold_points = gold_points + 1`
+          ).bind(confirmedRef, currentWeek)] : [])
         ]);
 
         // إنشاء تحدي أسبوعي للمستخدم الجديد (3 أشخاص عشوائيين)
@@ -447,9 +493,18 @@ export default {
 
         await updateLastActive(validation.clean, env);
 
+        const currentWeek = getCurrentWeek();
         const user = await env.DB.prepare(
-          'SELECT username, gold_points_weekly, silver_points_weekly, total_gold_all_time, total_silver_all_time FROM users WHERE username = ? AND is_deleted = 0'
-        ).bind(validation.clean).first();
+          `SELECT u.username,
+                  COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                  COALESCE(w.silver_points, 0) AS silver_points_weekly,
+                  u.total_gold_all_time,
+                  u.total_silver_all_time
+           FROM users u
+           LEFT JOIN weekly_leaderboard w
+             ON w.username = u.username AND w.week_number = ?
+           WHERE u.username = ? AND u.is_deleted = 0`
+        ).bind(currentWeek, validation.clean).first();
 
         if (!user)
           return new Response(JSON.stringify({ error: 'المستخدم غير موجود' }), { status: 404, headers });
@@ -633,10 +688,16 @@ export default {
         await env.DB.batch([
           // تأشير التحدي الحالي كمُستلَم
           env.DB.prepare('UPDATE weekly_challenges SET claimed = 1 WHERE id = ?').bind(challenge.id),
-          // إضافة 5 نقاط فضية للمستخدم
+          // المجموع الكلي (all-time) في جدول users — لا يُصفَّر أبداً
           env.DB.prepare(
-            'UPDATE users SET silver_points_weekly = silver_points_weekly + 5, total_silver_all_time = total_silver_all_time + 5 WHERE username = ?'
+            'UPDATE users SET total_silver_all_time = total_silver_all_time + 5 WHERE username = ?'
           ).bind(validation.clean),
+          // نقاط الأسبوع الحالي في weekly_leaderboard — بدون أي حاجة للتصفير لاحقاً
+          env.DB.prepare(
+            `INSERT INTO weekly_leaderboard (username, week_number, gold_points, silver_points)
+             VALUES (?, ?, 0, 5)
+             ON CONFLICT(username, week_number) DO UPDATE SET silver_points = silver_points + 5`
+          ).bind(validation.clean, currentWeek),
           // إدراج تحدي جديد فوراً لو يوجد مستخدمون
           ...(newTargets.length > 0 ? [env.DB.prepare(
             'INSERT INTO weekly_challenges (username, challenge_targets, completed_targets, claimed, week_number) VALUES (?, ?, ?, 0, ?)'
@@ -661,39 +722,21 @@ export default {
         const week  = url.searchParams.get('week') || getCurrentWeek();
         const limit = Math.min(parseInt(url.searchParams.get('limit')) || 10, 100);
 
+        // weekly_leaderboard هو المصدر الوحيد للحقيقة الآن — كل مستخدم نشط
+        // له صف واحد بالضبط لكل أسبوع (username, week_number) يُنشأ تلقائياً
+        // أول مرة يكسب نقطة فيها (INSERT ON CONFLICT في register/claim).
+        // الترتيب يُحسب هنا مباشرة بـ ROW_NUMBER() بدلاً من عمود rank مخزَّن،
+        // فلا حاجة لأي عملية "بناء" أو "تصفير" مسبقة — الاستعلام ذاتي الاكتفاء تماماً.
         const leaderboard = await env.DB.prepare(
-          'SELECT username, gold_points, silver_points, rank FROM weekly_leaderboard WHERE week_number = ? ORDER BY rank LIMIT ?'
+          `SELECT username, gold_points, silver_points,
+                  ROW_NUMBER() OVER (ORDER BY (gold_points + silver_points * 5) DESC) AS rank
+           FROM weekly_leaderboard
+           WHERE week_number = ?
+           ORDER BY rank
+           LIMIT ?`
         ).bind(week, limit).all();
 
-        // لو الجدول فارغ لهذا الأسبوع → ابنه من نقاط المستخدمين الحالية
-        if (leaderboard.results.length === 0) {
-          const users = await env.DB.prepare(
-            'SELECT username, gold_points_weekly, silver_points_weekly FROM users WHERE is_deleted = 0 ORDER BY (gold_points_weekly + silver_points_weekly * 5) DESC'
-          ).all();
-
-          if (users.results.length === 0)
-            return new Response(JSON.stringify({ leaderboard: [], week }), { headers });
-
-          // batch insert — 999 في كل دفعة
-          const BATCH_SIZE = 999;
-          const insertStmts = users.results.map((user, idx) =>
-            env.DB.prepare(
-              'INSERT OR IGNORE INTO weekly_leaderboard (username, week_number, gold_points, silver_points, rank) VALUES (?, ?, ?, ?, ?)'
-            ).bind(user.username, week, user.gold_points_weekly, user.silver_points_weekly, idx + 1)
-          );
-
-          for (let i = 0; i < insertStmts.length; i += BATCH_SIZE) {
-            const chunk = insertStmts.slice(i, i + BATCH_SIZE);
-            if (chunk.length > 0) await env.DB.batch(chunk);
-          }
-
-          const newLeaderboard = await env.DB.prepare(
-            'SELECT username, gold_points, silver_points, rank FROM weekly_leaderboard WHERE week_number = ? ORDER BY rank LIMIT ?'
-          ).bind(week, limit).all();
-
-          return new Response(JSON.stringify({ leaderboard: newLeaderboard.results, week }), { headers });
-        }
-
+        // لا يوجد أي مستخدم كسب نقاطاً هذا الأسبوع بعد — حالة طبيعية، وليست خطأ
         return new Response(JSON.stringify({ leaderboard: leaderboard.results, week }), { headers });
 
       } catch (err) {
@@ -705,63 +748,39 @@ export default {
   },
 
   // =========================================================================
-  // scheduled — يعمل كل أحد منتصف الليل (0 0 * * 0)
-  // 1. يحفظ نقاط الأسبوع في weekly_leaderboard (batch)
-  // 2. يحدث الترتيب بـ ROW_NUMBER() SQL واحدة
-  // 3. يصفّر النقاط الأسبوعية + يحذف تحديات قديمة (batch)
+  // scheduled — صيانة اختيارية فقط، ليست مطلوبة لعمل النظام الأسبوعي
+  //
+  // ملاحظة مهمة بعد التحديث: التصفير الأسبوعي لم يعد موجوداً كخطوة منفصلة.
+  // كل أسبوع له صفوف مستقلة تماماً في weekly_leaderboard (username, week_number)
+  // تُنشأ تلقائياً أول مرة يكسب فيها المستخدم نقطة (في /api/register أو
+  // /api/challenge/claim عبر INSERT ... ON CONFLICT). الترتيب نفسه يُحسب
+  // ديناميكياً في /api/leaderboard بـ ROW_NUMBER() في كل طلب — فلا يوجد أي
+  // عمود "rank" مخزَّن يحتاج تحديثاً، ولا أي UPDATE شامل يمسح نقاط الجميع.
+  //
+  // الدالة هنا باقية فقط لتنظيف البيانات القديمة جداً (اختياري بالكامل):
+  // - حذف تحديات أقدم من أسبوعين (تراكم غير ضروري في weekly_challenges)
+  // - حذف صفوف ترتيب أقدم من 8 أسابيع (تراكم غير ضروري في weekly_leaderboard)
+  // كلا العمليتين DELETE مباشر بدون قراءة/تكرار على كل مستخدم، فتكلفتهما
+  // منخفضة جداً وثابتة، ولا علاقة لهما بآلية التصفير القديمة المُلغاة.
+  //
+  // بما إن الميزة الأساسية (التصفير الذاتي) لا تعتمد على هذه الدالة إطلاقاً،
+  // فمن الآمن تمامًا ترك الموقع بدون Cron Trigger مفعّل (كما هو حالياً) —
+  // كل شيء سيعمل بشكل صحيح وتلقائي بدونها.
   // =========================================================================
   async scheduled(event, env, ctx) {
     try {
       const currentWeek = getCurrentWeek();
+      const oldChallengesBefore  = currentWeek - 2;
+      const oldLeaderboardBefore = currentWeek - 8;
 
-      // ── الخطوة 1: جلب المستخدمين عندهم نقاط ────────────────────────────
-      const users = await env.DB.prepare(
-        'SELECT username, gold_points_weekly, silver_points_weekly FROM users WHERE is_deleted = 0 AND (gold_points_weekly > 0 OR silver_points_weekly > 0)'
-      ).all();
-
-      // ── الخطوة 2: INSERT batch — دفعات 999 ──────────────────────────────
-      const BATCH_SIZE = 999;
-      const insertStatements = users.results.map(user =>
-        env.DB.prepare(
-          'INSERT OR IGNORE INTO weekly_leaderboard (username, week_number, gold_points, silver_points) VALUES (?, ?, ?, ?)'
-        ).bind(user.username, currentWeek, user.gold_points_weekly, user.silver_points_weekly)
-      );
-
-      for (let i = 0; i < insertStatements.length; i += BATCH_SIZE) {
-        const chunk = insertStatements.slice(i, i + BATCH_SIZE);
-        if (chunk.length > 0) await env.DB.batch(chunk);
-      }
-
-      // ── الخطوة 3: تحديث الترتيب بجملة SQL واحدة (ROW_NUMBER) ───────────
-      await env.DB.prepare(`
-        UPDATE weekly_leaderboard
-        SET rank = (
-          SELECT ranked.rn
-          FROM (
-            SELECT username,
-                   ROW_NUMBER() OVER (ORDER BY (gold_points + silver_points * 5) DESC) AS rn
-            FROM weekly_leaderboard
-            WHERE week_number = ?
-          ) AS ranked
-          WHERE ranked.username = weekly_leaderboard.username
-        )
-        WHERE week_number = ?
-      `).bind(currentWeek, currentWeek).run();
-
-      // ── الخطوة 4: تصفير + حذف قديم — batch واحد ────────────────────────
-      const twoWeeksAgo = currentWeek - 2;
       await env.DB.batch([
-        env.DB.prepare(
-          'UPDATE users SET gold_points_weekly = 0, silver_points_weekly = 0, last_weekly_reset = CURRENT_TIMESTAMP WHERE is_deleted = 0'
-        ),
-        env.DB.prepare(
-          'DELETE FROM weekly_challenges WHERE week_number < ?'
-        ).bind(twoWeeksAgo)
+        env.DB.prepare('DELETE FROM weekly_challenges WHERE week_number < ?').bind(oldChallengesBefore),
+        env.DB.prepare('DELETE FROM weekly_leaderboard WHERE week_number < ?').bind(oldLeaderboardBefore)
       ]);
 
-      console.log(`✅ تم تحديث الأسبوع ${currentWeek} — ${users.results.length} مستخدم`);
+      console.log(`✅ صيانة دورية — حذف بيانات أقدم من الحد المسموح (الأسبوع الحالي: ${currentWeek})`);
     } catch (err) {
-      console.error('Scheduled task error:', err);
+      console.error('Scheduled maintenance error:', err);
     }
   }
 };
