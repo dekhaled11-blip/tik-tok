@@ -15,7 +15,10 @@ function getCurrentWeek() {
 function buildNotIn(usedList) {
   if (!usedList || usedList.length === 0) return { clause: '1=1', params: [] };
   return {
-    clause: `username NOT IN (${usedList.map(() => '?').join(',')})`,
+    // مهم: لازم "u.username" مع اسم الجدول صراحة — بعد إضافة LEFT JOIN weekly_leaderboard
+    // بقى فيه عمود username في جدولين معاً (users و weekly_leaderboard)، والاسم المجرد
+    // "username" بدون بادئة يسبب خطأ "ambiguous column name" في SQLite ويفشل الاستعلام بالكامل.
+    clause: `u.username NOT IN (${usedList.map(() => '?').join(',')})`,
     params: usedList
   };
 }
