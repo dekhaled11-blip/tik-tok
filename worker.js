@@ -1,28 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // دالة مشتركة بين fetch() و scheduled() — نفس حساب رقم الأسبوع في كل مكان
-//
-// رقم الأسبوع = عدد الأسابيع الكاملة المنقضية منذ WEEK_EPOCH_UTC (أول أحد
-// بعد Unix Epoch — 1970/1/4 كان يوم أحد). هذا يحل مشكلتين كانتا موجودتين
-// في الحساب القديم (المبني على "منذ 1 يناير من السنة الحالية"):
-//
-//   1) تصادم بين السنين: الحساب القديم كان يبدأ من 0 كل سنة جديدة، فلو
-//      وقع نفس رقم الأسبوع في سنتين مختلفتين (مثال: الأسبوع 5 في 2026
-//      والأسبوع 5 في 2027)، فإن ON CONFLICT(username, week_number) كان
-//      سيدمج نقاط الأسبوعين معاً بالخطأ. رقم الأسبوع الجديد يتزايد للأبد
-//      ولا يتكرر مطلقاً بين أي سنتين.
-//
-//   2) عدم تطابق مع العداد التنازلي: الحدود الآن تقع بالضبط عند كل أحد
-//      الساعة 00:00 UTC — نفس اللحظة المستخدمة لحساب daysLeft/hoursLeft
-//      في /api/targets (عبر WEEK_EPOCH_UTC مباشرة)، فلا يوجد أي احتمال
-//      انحراف بين وقت "تبديل" رقم الأسبوع فعلياً في القاعدة ووقت وصول
-//      عداد المستخدم في الواجهة للصفر.
-//
-// ملاحظة: أي بيانات قديمة كانت مخزَّنة بأرقام أسابيع من الحساب القديم
-// (أرقام صغيرة تبدأ من 0) لن تتصادم مع الأرقام الجديدة (أرقام كبيرة جداً)
-// — ستبقى ببساطة كسجل تاريخي غير نشط، وسيبدأ الأسبوع الحالي بصف جديد
-// فارغ تحت الترقيم الجديد كما هو متوقع.
+// رقم الأسبوع = عدد الأسابيع الكاملة منذ WEEK_EPOCH_UTC (أول أحد بعد Unix
+// Epoch — 1970/1/4 كان يوم أحد). يتزايد للأبد بدون تصادم بين السنين،
+// وحدوده تقع بالضبط عند كل أحد 00:00 UTC (تطابق تام مع عداد /api/targets).
 // ═══════════════════════════════════════════════════════════════════════════
-const WEEK_EPOCH_UTC = Date.UTC(1970, 0, 4); // أول أحد بعد Unix Epoch (UTC)
+const WEEK_EPOCH_UTC = Date.UTC(1970, 0, 4);
 function getCurrentWeek() {
   return Math.floor((Date.now() - WEEK_EPOCH_UTC) / (7 * 24 * 60 * 60 * 1000));
 }
@@ -40,6 +22,92 @@ function buildNotIn(usedList) {
     clause: `u.username NOT IN (${usedList.map(() => '?').join(',')})`,
     params: usedList
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// دالة: تعليم المستخدمين غير النشطين منذ 7 أيام كمحذوفين (soft delete)
+//
+// على مستوى الملف الأعلى (بدل داخل fetch فقط) لأنها تُستدعى من
+// pickChallengeTargets أيضاً — هذا يضمن أن حالة "الخمول" مُحدَّثة دائماً
+// مباشرة قبل اختيار أهداف التحدي، بغض النظر عن نقطة الدخول (تسجيل، تحميل
+// تحدي، أو استلام) — بدل الاعتماد فقط على زيارة سابقة لـ /api/targets.
+// ─────────────────────────────────────────────────────────────────────────
+async function checkAndDeleteInactiveUsers(env) {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      'UPDATE users SET is_deleted = 1 WHERE last_active < ? AND is_deleted = 0'
+    ).bind(sevenDaysAgo).run();
+  } catch (err) {
+    console.error('checkAndDeleteInactiveUsers error:', err);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// دالة مشتركة: اختيار أهداف تحدي جديدة لمستخدم مع منع التكرار للأبد
+//
+// تُستخدم في 3 أماكن (تسجيل مستخدم جديد، أول تحميل للتحدي، إنشاء تحدٍ جديد
+// بعد كل استلام).
+//
+// القاعدة الأساسية: يُستبعد نهائياً أي شخص سبق واستُهدف لهذا المستخدم من
+// قبل إطلاقاً (بأي أسبوع كان) — بلا أي "فترة تبريد" أو استثناء زمني. هذا
+// يسري على كلا الفئتين أدناه بدون استثناء.
+//
+// أولوية الاختيار (مستويان، الثاني ملاذ أخير حقيقي وليس بديلاً متساوياً):
+//
+//   المستوى 1 — نشيطون (is_deleted = 0): الخيار المفضَّل دائماً، لأن
+//               التبادل الحقيقي يحتاج طرفاً ثانياً نشيطاً قادراً على "رد"
+//               المتابعة لاحقاً عبر تحدياته هو.
+//
+//   المستوى 2 — خاملون (is_deleted = 1)، فقط لو النشيطون غير كافين: مفيد
+//               لتفادي "لا يوجد تحدي" بقاعدة بيانات صغيرة/متوسطة، لأن
+//               المتابعة على تيك توك نفسها قيمة حقيقية بغض النظر عن نشاط
+//               الحساب على هذا الموقع — حتى لو كان "التبادل" غير مضمون
+//               الرجوع بنفس السرعة.
+//
+// لو لم يكفِ المستويان معاً (نادر جداً — يعني استهدف كل من يعرفهم الموقع،
+// نشيطاً كان أو خاملاً)، تُرجَع الدالة بعدد أقل من المطلوب أو حتى فارغة —
+// وهذي إشارة صادقة ("لا يوجد تحدي حالياً") مو خللاً يجب إصلاحه.
+// ═══════════════════════════════════════════════════════════════════════════
+async function pickChallengeTargets(username, env, count = 3) {
+  // تحديث حالة الخمول أولاً — يضمن أن تصنيف "نشيط/خامل" أدناه مبني على
+  // بيانات حديثة، مهما كانت نقطة الدخول
+  await checkAndDeleteInactiveUsers(env);
+
+  // كل التحديات السابقة لهذا المستخدم (كل الأسابيع) — لبناء تاريخ الأهداف
+  // الكامل، يُستبعد بغض النظر عن حالة النشاط
+  const history = await env.DB.prepare(
+    'SELECT challenge_targets FROM weekly_challenges WHERE username = ?'
+  ).bind(username).all();
+
+  const everTargeted = new Set(); // كل من استُهدف من قبل، بأي أسبوع كان — يُستبعد نهائياً
+  for (const row of history.results) {
+    let arr = [];
+    try { arr = JSON.parse(row.challenge_targets || '[]'); } catch { arr = []; }
+    for (const t of arr) everTargeted.add(t);
+  }
+
+  const picked = [];
+
+  // تسحب بقية العدد المطلوب من فئة نشاط محدَّدة (0=نشيط، 1=خامل)، مستبعدة
+  // كل من سبق استهدافه + المُختار بالمستوى السابق + نفس المستخدم
+  async function fillFrom(isDeletedValue) {
+    if (picked.length >= count) return;
+    const remaining  = count - picked.length;
+    const excludeAll = [...new Set([...everTargeted, ...picked, username])];
+    const { clause, params } = buildNotIn(excludeAll);
+    const rows = await env.DB.prepare(
+      `SELECT u.username FROM users u
+       WHERE u.is_deleted = ? AND ${clause}
+       ORDER BY RANDOM() LIMIT ?`
+    ).bind(isDeletedValue, ...params, remaining).all();
+    for (const r of rows.results) picked.push(r.username);
+  }
+
+  await fillFrom(0);                            // المستوى 1: النشيطون أولاً
+  if (picked.length < count) await fillFrom(1);  // المستوى 2: الخاملون كملاذ أخير فقط
+
+  return picked;
 }
 
 export default {
@@ -73,19 +141,6 @@ export default {
       return { clean };
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // دالة: تعليم المستخدمين غير النشطين منذ 7 أيام كمحذوفين (soft delete)
-    // ─────────────────────────────────────────────────────────────────────
-    async function checkAndDeleteInactiveUsers(env) {
-      try {
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        await env.DB.prepare(
-          'UPDATE users SET is_deleted = 1 WHERE last_active < ? AND is_deleted = 0'
-        ).bind(sevenDaysAgo).run();
-      } catch (err) {
-        console.error('checkAndDeleteInactiveUsers error:', err);
-      }
-    }
 
     // ─────────────────────────────────────────────────────────────────────
     // دالة: تحديث آخر نشاط للمستخدم
@@ -150,11 +205,8 @@ export default {
         ).first();
         const total = totalCount.total;
 
-        // حساب الوقت المتبقي لنهاية الأسبوع
-        // مبني مباشرة على WEEK_EPOCH_UTC ورقم الأسبوع الحالي (currentWeek) —
-        // نفس المصدر بالضبط المستخدم في getCurrentWeek() — بدل حساب مستقل
-        // بـ getDay()/setHours() كان بالسابق قد ينحرف عن لحظة تبديل رقم
-        // الأسبوع الفعلي. الآن: نهاية الأسبوع = بداية الأسبوع التالي تماماً.
+        // حساب الوقت المتبقي لنهاية الأسبوع — مبني من نفس WEEK_EPOCH_UTC
+        // ورقم الأسبوع الحالي، فلا يوجد أي احتمال انحراف عن لحظة التبديل الفعلية
         const nowMs           = Date.now();
         const nextWeekStartMs = WEEK_EPOCH_UTC + (currentWeek + 1) * 7 * 24 * 60 * 60 * 1000;
         const msLeft   = Math.max(0, nextWeekStartMs - nowMs);
@@ -482,14 +534,15 @@ export default {
           ).bind(confirmedRef, currentWeek)] : [])
         ]);
 
-        // إنشاء تحدي أسبوعي للمستخدم الجديد (3 أشخاص عشوائيين)
-        const allUsers = await env.DB.prepare(
-          'SELECT username FROM users WHERE username != ? AND is_deleted = 0 ORDER BY RANDOM() LIMIT 3'
-        ).bind(clean).all();
+        // إنشاء تحدي أسبوعي للمستخدم الجديد — بأهداف ذكية بدون أي تكرار
+        const targetUsernames = await pickChallengeTargets(clean, env, 3);
 
-        const targetUsernames = allUsers.results.map(u => u.username);
-
-        if (targetUsernames.length > 0) {
+        // لا يُنشأ تحدي إلا لو اكتمل العدد المطلوب (3) بدون تكرار — لو لم
+        // يتوفر عدد كافٍ من المرشحين الفريدين، لا نُنشئ تحدياً ناقصاً؛
+        // أول زيارة لصفحة التحدي ستعرض "لا يوجد تحدي حالياً" بدل ذلك،
+        // وستُعاد المحاولة تلقائياً لاحقاً (عبر GET /api/challenge) بمجرد
+        // توفر مستخدمين إضافيين.
+        if (targetUsernames.length === 3) {
           await env.DB.prepare(
             'INSERT INTO weekly_challenges (username, challenge_targets, completed_targets, claimed, week_number) VALUES (?, ?, ?, 0, ?)'
           ).bind(clean, JSON.stringify(targetUsernames), JSON.stringify([]), currentWeek).run();
@@ -498,7 +551,12 @@ export default {
         return new Response(JSON.stringify({ success: true }), { headers });
       } catch (err) {
         console.error('Register error:', err);
-        return new Response(JSON.stringify({ error: 'خطأ في التسجيل' }), { status: 500, headers });
+        // رسالة ودودة بدل الرسالة التقنية العامة — تغطي أي خطأ غير متوقع
+        // بما فيه احتمال تجاوز الحد اليومي للكتابات على قاعدة البيانات،
+        // وتوجّه المستخدم لمحاولة لاحقة بدل تخويفه برسالة "خطأ خادم" تقنية
+        return new Response(JSON.stringify({
+          error: 'لقد اكتملت التسجيلات لهذا اليوم، يرجى المحاولة مرة أخرى غداً 🙏'
+        }), { status: 500, headers });
       }
     }
 
@@ -567,16 +625,13 @@ export default {
           'SELECT id, challenge_targets, completed_targets, claimed FROM weekly_challenges WHERE username = ? AND week_number = ? ORDER BY created_at DESC LIMIT 1'
         ).bind(validation.clean, currentWeek).first();
 
-        // لا يوجد تحدي → أنشئ واحداً جديداً
+        // لا يوجد تحدي → أنشئ واحداً جديداً بأهداف ذكية غير مكررة
         if (!challenge) {
-          const allUsers = await env.DB.prepare(
-            'SELECT username FROM users WHERE username != ? AND is_deleted = 0 ORDER BY RANDOM() LIMIT 3'
-          ).bind(validation.clean).all();
+          const targetUsernames = await pickChallengeTargets(validation.clean, env, 3);
 
-          const targetUsernames = allUsers.results.map(u => u.username);
-
-          // حالة: لا يوجد مستخدمون آخرون بعد
-          if (targetUsernames.length === 0) {
+          // لا يوجد عدد كافٍ من المرشحين الفريدين لإكمال 3 أهداف بدون
+          // تكرار (سواء صفر أو أكثر) → لا تحدي حالياً بدل تحدٍ ناقص أو مكرر
+          if (targetUsernames.length < 3) {
             return new Response(JSON.stringify({
               id: null, targets: [], completed: [], claimed: false, progress: '0/0'
             }), { headers });
@@ -702,16 +757,21 @@ export default {
         if (completed.length !== targets.length)
           return new Response(JSON.stringify({ error: 'لم تكمل جميع الأهداف بعد' }), { status: 400, headers });
 
-        // إنشاء تحدي جديد فوراً بعد الاستلام
-        const newUsers = await env.DB.prepare(
-          'SELECT username FROM users WHERE username != ? AND is_deleted = 0 ORDER BY RANDOM() LIMIT 3'
-        ).bind(validation.clean).all();
+        // تأشير التحدي كمُستلَم بشكل ذري (Compare-And-Swap): الشرط "AND claimed = 0"
+        // يضمن أن التحديث ينجح مرة واحدة فقط حتى لو وصل طلبان متزامنان (نقرتان
+        // سريعتان، أو تبويبان مفتوحان) — يمنع منح +5 نقاط مرتين أو إنشاء تحديين
+        // جديدين لنفس الاستلام.
+        const claimResult = await env.DB.prepare(
+          'UPDATE weekly_challenges SET claimed = 1 WHERE id = ? AND claimed = 0'
+        ).bind(challenge.id).run();
 
-        const newTargets = newUsers.results.map(u => u.username);
+        if (!claimResult.meta || claimResult.meta.changes !== 1)
+          return new Response(JSON.stringify({ error: 'طالبت بالفعل' }), { status: 400, headers });
+
+        // إنشاء تحدي جديد فوراً بعد الاستلام — بأهداف ذكية غير مكررة
+        const newTargets = await pickChallengeTargets(validation.clean, env, 3);
 
         await env.DB.batch([
-          // تأشير التحدي الحالي كمُستلَم
-          env.DB.prepare('UPDATE weekly_challenges SET claimed = 1 WHERE id = ?').bind(challenge.id),
           // المجموع الكلي (all-time) في جدول users — لا يُصفَّر أبداً
           env.DB.prepare(
             'UPDATE users SET total_silver_all_time = total_silver_all_time + 5 WHERE username = ?'
@@ -722,8 +782,8 @@ export default {
              VALUES (?, ?, 0, 5)
              ON CONFLICT(username, week_number) DO UPDATE SET silver_points = silver_points + 5`
           ).bind(validation.clean, currentWeek),
-          // إدراج تحدي جديد فوراً لو يوجد مستخدمون
-          ...(newTargets.length > 0 ? [env.DB.prepare(
+          // إدراج تحدي جديد فوراً فقط لو اكتمل العدد كاملاً (3) بدون تكرار
+          ...(newTargets.length === 3 ? [env.DB.prepare(
             'INSERT INTO weekly_challenges (username, challenge_targets, completed_targets, claimed, week_number) VALUES (?, ?, ?, 0, ?)'
           ).bind(validation.clean, JSON.stringify(newTargets), JSON.stringify([]), currentWeek)] : [])
         ]);
@@ -734,7 +794,12 @@ export default {
         }), { headers });
 
       } catch (err) {
-        return new Response(JSON.stringify({ error: 'خطأ في الخادم' }), { status: 500, headers });
+        console.error('Claim error:', err);
+        // نفس المبدأ: رسالة ودودة تغطي أي خطأ غير متوقع (بما فيه احتمال
+        // تجاوز الحد اليومي للكتابات) بدل رسالة تقنية مخيفة للمستخدم
+        return new Response(JSON.stringify({
+          error: 'انتهت فترة استلام النقاط لهذا اليوم، يرجى المحاولة مرة أخرى غداً 🙏'
+        }), { status: 500, headers });
       }
     }
 
