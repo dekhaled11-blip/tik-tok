@@ -256,7 +256,7 @@ export default {
            LEFT JOIN weekly_leaderboard w
              ON w.username = u.username AND w.week_number = ?
            WHERE u.is_deleted = 0
-           ORDER BY gold_points_weekly DESC, RANDOM()
+           ORDER BY COALESCE(w.gold_points, 0) DESC, RANDOM()
            LIMIT 1`
         ).bind(currentWeek).first();
 
@@ -278,7 +278,7 @@ export default {
              LEFT JOIN weekly_leaderboard w
                ON w.username = u.username AND w.week_number = ?
              WHERE u.is_deleted = 0 AND ${clause}
-             ORDER BY silver_points_weekly DESC, RANDOM()
+             ORDER BY COALESCE(w.silver_points, 0) DESC, RANDOM()
              LIMIT 1`
           ).bind(currentWeek, ...params).first();
         }
@@ -308,7 +308,7 @@ export default {
              LEFT JOIN weekly_leaderboard w
                ON w.username = u.username AND w.week_number = ?
              WHERE u.is_deleted = 0 AND ${clause}
-             ORDER BY silver_points_weekly DESC
+             ORDER BY COALESCE(w.silver_points, 0) DESC
              LIMIT 1 OFFSET ?`
           ).bind(currentWeek, ...params, offset25).first();
 
@@ -343,7 +343,7 @@ export default {
                LEFT JOIN weekly_leaderboard w
                  ON w.username = u.username AND w.week_number = ?
                WHERE u.is_deleted = 0 AND ${clause}
-               ORDER BY silver_points_weekly DESC
+               ORDER BY COALESCE(w.silver_points, 0) DESC
                LIMIT 1 OFFSET ?`
             ).bind(currentWeek, ...params, offset75).first();
           }
@@ -814,19 +814,27 @@ export default {
         // weekly_leaderboard هو المصدر الوحيد للحقيقة الآن — كل مستخدم نشط
         // له صف واحد بالضبط لكل أسبوع (username, week_number) يُنشأ تلقائياً
         // أول مرة يكسب نقطة فيها (INSERT ON CONFLICT في register/claim).
-        // الترتيب يُحسب هنا مباشرة بـ ROW_NUMBER() بدلاً من عمود rank مخزَّن،
-        // فلا حاجة لأي عملية "بناء" أو "تصفير" مسبقة — الاستعلام ذاتي الاكتفاء تماماً.
+        //
+        // ملاحظة أداء: الاستعلام يرتب النتائج مرة واحدة فقط بـ ORDER BY
+        // مباشرة (بدل ROW_NUMBER() OVER + ORDER BY خارجي على نفس المعيار،
+        // اللي كان يرتب البيانات مرتين بلا أي فائدة فعلية — الواجهة الحالية
+        // أصلاً تعتمد على ترتيب المصفوفة نفسها، لا على أي حقل rank قادم من
+        // السيرفر). هذا يقلل زمن الاستعلام بشكل كبير مع نمو عدد المستخدمين،
+        // بدون أي تغيير في شكل الاستجابة — rank لا تزال تُرجَع كحقل، محسوبة
+        // بكود التطبيق بتكلفة شبه معدومة (index + 1)، حفاظاً على التوافق مع
+        // أي مستهلك آخر محتمل لهذا الـ endpoint غير الواجهة الحالية.
         const leaderboard = await env.DB.prepare(
-          `SELECT username, gold_points, silver_points,
-                  ROW_NUMBER() OVER (ORDER BY (gold_points + silver_points * 5) DESC) AS rank
+          `SELECT username, gold_points, silver_points
            FROM weekly_leaderboard
            WHERE week_number = ?
-           ORDER BY rank
+           ORDER BY (gold_points + silver_points * 5) DESC
            LIMIT ?`
         ).bind(week, limit).all();
 
+        const ranked = leaderboard.results.map((row, i) => ({ ...row, rank: i + 1 }));
+
         // لا يوجد أي مستخدم كسب نقاطاً هذا الأسبوع بعد — حالة طبيعية، وليست خطأ
-        return new Response(JSON.stringify({ leaderboard: leaderboard.results, week }), { headers });
+        return new Response(JSON.stringify({ leaderboard: ranked, week }), { headers });
 
       } catch (err) {
         return new Response(JSON.stringify({ error: 'خطأ في الخادم' }), { status: 500, headers });
