@@ -458,11 +458,21 @@ export default {
         ).bind(clean).first();
 
         if (existingUser) {
-          // المستخدم موجود ونشط
-          if (existingUser.is_deleted === 0)
-            return new Response(JSON.stringify({ error: 'سجلت بالفعل' }), { status: 400, headers });
+          // المستخدم موجود ونشط بالفعل — إعادة دخول بسيطة بالاسم فقط
+          // (بقرار صريح: الموقع بلا كلمة مرور، الاسم وحده كافٍ للدخول).
+          //
+          // مهم: لا يُطبَّق أي منطق إحالة هنا حتى لو أُرفق رابط إحالة
+          // بالطلب — إعادة الدخول لحساب موجود أصلاً لا يجب أن تمنح أي
+          // نقاط إحالة جديدة، وإلا صار ممكناً تضخيم نقاط الإحالة بتكرار
+          // تسجيل الخروج والدخول لنفس الحساب مراراً.
+          if (existingUser.is_deleted === 0) {
+            await env.DB.prepare(
+              'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE username = ?'
+            ).bind(clean).run();
+            return new Response(JSON.stringify({ success: true, returning: true }), { headers });
+          }
 
-          // المستخدم محذوف سابقاً → استعادة حسابه
+          // المستخدم محذوف سابقاً (خامل) → استعادة حسابه
           let confirmedRef = null;
           if (ref) {
             const refV = sanitizeAndValidate(ref);
