@@ -51,6 +51,15 @@
     .timer-pill { background: var(--red-dim); border: 1px solid var(--red); color: var(--red); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; white-space: nowrap; }
     .user-pill { background: var(--surface2); border: 1px solid var(--border2); border-radius: 20px; padding: 5px 14px; font-size: 13px; color: var(--green); font-weight: 600; display: none; }
     .user-pill.show { display: block; }
+    .logout-btn {
+      display: none; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border2);
+      background: var(--surface2); color: var(--muted); cursor: pointer; padding: 0;
+      transition: color .15s, border-color .15s;
+    }
+    .logout-btn.show { display: flex; }
+    .logout-btn:hover { color: var(--red); border-color: var(--red); }
+    .logout-btn:disabled { opacity: .5; cursor: default; }
 
     /* ── التخطيط ── */
     .layout { display: flex; padding-top: var(--topbar-h); min-height: 100vh; }
@@ -62,6 +71,14 @@
     .nav-link:hover { background: var(--surface2); color: var(--text); border-color: var(--border); }
     .nav-link.active { background: var(--red-dim); color: var(--red); border-color: rgba(254,44,85,0.25); font-weight: 600; }
     .nav-icon { font-size: 17px; min-width: 20px; text-align: center; }
+    .icon { width: 17px; height: 17px; vertical-align: -3px; flex-shrink: 0; }
+    .icon-sm { width: 14px; height: 14px; vertical-align: -2px; }
+    .icon-lg { width: 26px; height: 26px; }
+    .medal-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid currentColor;
+      font-size: 11px; font-weight: 700; vertical-align: -6px;
+    }
     .sidebar-bottom { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 850; }
     .sidebar-overlay.show { display: block; }
@@ -157,6 +174,8 @@
     .hint.invalid { color: var(--red); }
     .cf-turnstile { margin: 14px 0; }
     .error-msg { color: var(--red); font-size: 13px; padding: 10px 14px; background: var(--red-dim); border: 1px solid rgba(254,44,85,0.25); border-radius: 8px; margin-bottom: 12px; display: none; }
+    .follow-gate-note { font-size: 13px; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; display: none; color: var(--gold); background: var(--gold-dim); border: 1px solid rgba(255,215,0,0.25); }
+    .follow-gate-note.done { color: var(--green); background: rgba(37,211,102,0.1); border-color: rgba(37,211,102,0.3); }
     .primary-btn { width: 100%; padding: 13px; background: var(--red); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 18px var(--red-glow); }
     .primary-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
     .primary-btn:disabled { background: #333; box-shadow: none; cursor: not-allowed; opacity: 0.6; }
@@ -195,6 +214,11 @@
 
     /* ── الأسئلة الشائعة ── */
     .faq-list { display: flex; flex-direction: column; gap: 10px; }
+    .legal-section { margin-bottom: 22px; }
+    .legal-section-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .legal-text { font-size: 13.5px; line-height: 1.9; color: var(--muted); }
+    .legal-text + .legal-text { margin-top: 8px; }
+    .legal-updated { font-size: 12px; color: var(--muted); margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
     .faq-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
     .faq-q { padding: 16px 18px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
     .faq-q:hover { background: var(--surface2); }
@@ -235,13 +259,16 @@
       <span></span><span></span><span></span>
     </div>
     <div class="logo">
-      <div class="logo-icon">🎵</div>
+      <div class="logo-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg></div>
       <div class="logo-text">تريند <span>تيك توك</span></div>
     </div>
   </div>
   <div class="topbar-left">
-    <div class="timer-pill" id="reset-timer">⏳ جاري...</div>
+    <div class="timer-pill" id="reset-timer"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> جاري...</div>
     <div class="user-pill" id="user-pill">@-</div>
+    <button class="logout-btn" id="logout-btn" onclick="logout()" title="تسجيل خروج" aria-label="تسجيل خروج">
+      <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 16l5-4-5-4"/><path d="M15 12H4"/></svg>
+    </button>
   </div>
 </header>
 
@@ -252,24 +279,30 @@
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-section-label">القائمة</div>
     <div class="nav-link active" id="nav-home" onclick="showPage('home')">
-      <span class="nav-icon">🏠</span> الرئيسية
+      <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg></span> الرئيسية
     </div>
     <div class="nav-link" id="nav-challenge" onclick="showPage('challenge')">
-      <span class="nav-icon">🎯</span> تحديي الأسبوعي
+      <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span> تحديي الأسبوعي
     </div>
     <div class="nav-link" id="nav-leaderboard" onclick="showPage('leaderboard')">
-      <span class="nav-icon">🏆</span> الترتيب
+      <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M8 4h8v6a4 4 0 01-8 0z"/><path d="M8 6H5a3 3 0 003 3M16 6h3a3 3 0 01-3 3"/><path d="M10 14v3M14 14v3M8 20h8"/></svg></span> الترتيب
     </div>
     <div class="sidebar-section-label">معلومات</div>
     <div class="nav-link" id="nav-how" onclick="showPage('how')">
-      <span class="nav-icon">📖</span> كيف يعمل الموقع
+      <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 5a2 2 0 012-2h6v16H6a2 2 0 00-2 2z"/><path d="M20 5a2 2 0 00-2-2h-6v16h6a2 2 0 012 2z"/></svg></span> كيف يعمل الموقع
     </div>
     <div class="nav-link" id="nav-faq" onclick="showPage('faq')">
-      <span class="nav-icon">❓</span> الأسئلة الشائعة
+      <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M9.3 9.5a2.7 2.7 0 015.2.8c0 1.8-2.5 2-2.5 4"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg></span> الأسئلة الشائعة
     </div>
+    <a class="nav-link" href="privacy-policy.html">
+      <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></span> سياسة الخصوصية
+    </a>
+    <a class="nav-link" href="terms-of-service.html">
+      <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg></span> الشروط والأحكام
+    </a>
     <div class="sidebar-bottom">
       <div class="nav-link" style="font-size:11px;cursor:default;">
-        <span class="nav-icon">⚡</span> يتجدد كل أحد
+        <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="currentColor" stroke="none"/></svg></span> يتجدد كل أحد
       </div>
     </div>
   </nav>
@@ -279,35 +312,35 @@
     <!-- ══ الرئيسية ══ -->
     <div class="page active" id="page-home">
       <div class="page-header">
-        <div class="page-title">منصة تبادل المتابعات 🎵</div>
+        <div class="page-title">منصة تبادل المتابعات</div>
         <div class="page-sub">تابع آخرين واحصل على متابعات حقيقية على TikTok</div>
       </div>
 
       <div class="leaders-row">
         <div class="leader-card gold">
-          <div class="leader-medal">🥇</div>
+          <div class="leader-medal"><span class="medal-badge" style="color:var(--gold)">1</span></div>
           <div class="leader-info">
             <div class="leader-label">متصدر الذهب</div>
             <div class="leader-name" id="top-gold-name">-</div>
-            <div class="leader-pts" id="top-gold-points">0 💎</div>
+            <div class="leader-pts"><span id="top-gold-points">0</span> <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)"><path d="M6.5 8L8.5 4h7l2 4-7 12z"/><path d="M6.5 8h11M9.5 8l2.5 12 2.5-12"/></svg></div>
           </div>
         </div>
         <div class="leader-card silver">
-          <div class="leader-medal">🥈</div>
+          <div class="leader-medal"><span class="medal-badge" style="color:var(--silver)">2</span></div>
           <div class="leader-info">
             <div class="leader-label">متصدر الفضة</div>
             <div class="leader-name" id="top-silver-name">-</div>
-            <div class="leader-pts" id="top-silver-points">0 ✨</div>
+            <div class="leader-pts"><span id="top-silver-points">0</span> <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg></div>
           </div>
         </div>
       </div>
 
       <div class="stats-card" id="user-stats">
         <div class="stats-user-header">
-          <div class="stats-avatar">🎵</div>
+          <div class="stats-avatar"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg></div>
           <div>
             <div class="stats-username" id="current-username">-</div>
-            <div class="stats-tag">✅ مسجل هذا الأسبوع</div>
+            <div class="stats-tag"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12.5l5 5L20 6"/></svg> مسجل هذا الأسبوع</div>
           </div>
         </div>
         <div class="stats-grid">
@@ -337,7 +370,7 @@
           </div>
         </div>
         <div class="share-box" id="share-box" style="display:none;">
-          <div class="share-label">🔗 رابط إحالتك — شاركه واكسب نقاط ذهبية</div>
+          <div class="share-label"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M9.5 14.5l5-5"/><path d="M11 6l1-1a3.5 3.5 0 015 5l-1 1"/><path d="M13 18l-1 1a3.5 3.5 0 01-5-5l1-1"/></svg> رابط إحالتك — شاركه واكسب نقاط ذهبية</div>
           <div class="share-row">
             <input type="text" class="share-input" id="share-link" readonly>
             <button class="share-btn" onclick="copyLink()">نسخ</button>
@@ -345,22 +378,23 @@
         </div>
       </div>
 
-      <div class="section-title">👥 تابعهم الآن واكسب مكانك</div>
+      <div class="section-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17.5" cy="9" r="2.3"/><path d="M15.8 14.8c2.3.5 4 2.3 4.2 5.2"/></svg> تابعهم الآن واكسب مكانك</div>
       <div class="targets-list" id="targets-list"></div>
+      <div class="follow-gate-note" id="follow-gate-note"></div>
 
       <div class="reg-card" id="reg-form" style="display:none;">
-        <div class="reg-title">✍️ سجّل حسابك مجاناً</div>
+        <div class="reg-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 20l1-4.2L15 5.6l3.4 3.4L8.2 19.2z"/><path d="M13.3 7.3l3.4 3.4"/></svg> سجّل حسابك مجاناً</div>
         <div class="reg-sub">أضف اسم حسابك على TikTok لتظهر في قائمة المتابعات</div>
         <label class="form-label">اسم المستخدم على TikTok</label>
         <input type="text" id="username" placeholder="مثال: keke_0990" maxlength="24" autocomplete="off" spellcheck="false">
         <div class="hint" id="input-hint"></div>
         <div class="cf-turnstile" data-sitekey="0x4AAAAAADuFvGEqm-hNthvW" data-callback="onTurnstileSuccess"></div>
         <div class="error-msg" id="error-msg"></div>
-        <button class="primary-btn" id="reg-btn" onclick="register()" disabled>✅ انضم واجمع النقاط</button>
+        <button class="primary-btn" id="reg-btn" onclick="register()" disabled><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12.5l5 5L20 6"/></svg> انضم واجمع النقاط</button>
       </div>
 
       <div class="reg-card" id="already-registered" style="display:none;">
-        <div class="reg-title" style="color:var(--green);">✅ أنت مسجل!</div>
+        <div class="reg-title" style="color:var(--green);"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12.5l5 5L20 6"/></svg> أنت مسجل!</div>
         <div class="reg-sub">شارك رابط إحالتك لكسب نقاط ذهبية</div>
         <div class="share-row">
           <input type="text" class="share-input" id="existing-link" readonly>
@@ -372,7 +406,7 @@
     <!-- ══ تحديي ══ -->
     <div class="page" id="page-challenge">
       <div class="page-header">
-        <div class="page-title">🎯 تحديي الأسبوعي</div>
+        <div class="page-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg> تحديي الأسبوعي</div>
         <div class="page-sub">تابع الأشخاص الثلاثة واستلم نقاطك الفضية</div>
       </div>
       <div id="challenge-logged-in" style="display:none;">
@@ -386,13 +420,13 @@
           </div>
           <div id="challenge-targets"></div>
           <button class="claim-btn" id="claim-button" disabled onclick="claimPoints()">
-            📦 استلم 5 نقاط فضية ✨
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v9l9 5 9-5V8"/><path d="M12 13v9"/></svg> استلم 5 نقاط فضية <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg>
           </button>
         </div>
       </div>
       <div id="challenge-guest" style="display:none;">
         <div class="empty-state">
-          <div class="empty-icon">🔒</div>
+          <div class="empty-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div>
           <div class="empty-text">سجّل أولاً من الصفحة الرئيسية للوصول للتحدي</div>
         </div>
       </div>
@@ -401,21 +435,21 @@
     <!-- ══ الترتيب ══ -->
     <div class="page" id="page-leaderboard">
       <div class="page-header">
-        <div class="page-title">🏆 ترتيب هذا الأسبوع</div>
+        <div class="page-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M8 4h8v6a4 4 0 01-8 0z"/><path d="M8 6H5a3 3 0 003 3M16 6h3a3 3 0 01-3 3"/><path d="M10 14v3M14 14v3M8 20h8"/></svg> ترتيب هذا الأسبوع</div>
         <div class="page-sub">أعلى 10 في نقاط هذا الأسبوع</div>
       </div>
       <div class="leaderboard-table" id="lb-table">
         <div class="lb-row lb-header">
           <div>#</div><div>المستخدم</div><div>النقاط</div>
         </div>
-        <div style="padding:30px;text-align:center;color:var(--muted);font-size:14px;">⏳ جاري التحميل...</div>
+        <div style="padding:30px;text-align:center;color:var(--muted);font-size:14px;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> جاري التحميل...</div>
       </div>
     </div>
 
     <!-- ══ كيف يعمل ══ -->
     <div class="page" id="page-how">
       <div class="page-header">
-        <div class="page-title">📖 كيف يعمل الموقع</div>
+        <div class="page-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 5a2 2 0 012-2h6v16H6a2 2 0 00-2 2z"/><path d="M20 5a2 2 0 00-2-2h-6v16h6a2 2 0 012 2z"/></svg> كيف يعمل الموقع</div>
         <div class="page-sub">دليل سريع لفهم المنصة</div>
       </div>
       <div class="how-steps">
@@ -440,15 +474,15 @@
           <div><div class="step-title">تصعد في الترتيب</div><div class="step-desc">كل أحد يتجدد كل شيء — الترتيب يُحفظ في السجل والنقاط تبدأ من جديد.</div></div>
         </div>
       </div>
-      <div class="section-title">💰 طريقة حساب النقاط</div>
+      <div class="section-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M8 4h8v6a4 4 0 01-8 0z"/><path d="M8 6H5a3 3 0 003 3M16 6h3a3 3 0 01-3 3"/><path d="M10 14v3M14 14v3M8 20h8"/></svg> طريقة حساب النقاط</div>
       <div class="points-cards">
         <div class="points-card gold">
-          <div class="points-emoji">💎</div>
+          <div class="points-emoji"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)"><path d="M6.5 8L8.5 4h7l2 4-7 12z"/><path d="M6.5 8h11M9.5 8l2.5 12 2.5-12"/></svg></div>
           <div class="points-type">نقاط ذهبية</div>
           <div class="points-how">تُكسب عندما يسجل شخص عبر رابط إحالتك.<br>لا حد أقصى — كلما دعوت أكثر كسبت أكثر.</div>
         </div>
         <div class="points-card silver">
-          <div class="points-emoji">✨</div>
+          <div class="points-emoji"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg></div>
           <div class="points-type">نقاط فضية</div>
           <div class="points-how">تُكسب عند إكمال التحدي الأسبوعي.<br>+5 نقاط لكل تحدٍ تكمله.</div>
         </div>
@@ -458,7 +492,7 @@
     <!-- ══ الأسئلة الشائعة ══ -->
     <div class="page" id="page-faq">
       <div class="page-header">
-        <div class="page-title">❓ الأسئلة الشائعة</div>
+        <div class="page-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M9.3 9.5a2.7 2.7 0 015.2.8c0 1.8-2.5 2-2.5 4"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg> الأسئلة الشائعة</div>
         <div class="page-sub">إجابات على أكثر الأسئلة تكراراً</div>
       </div>
       <div class="faq-list">
@@ -489,6 +523,8 @@
       </div>
     </div>
 
+
+
   </main>
 </div>
 
@@ -496,6 +532,9 @@
   const WORKER_URL = "https://tiktok-viral.onlinepdf.workers.dev";
   let currentUsername = null;
   let turnstileToken  = null;
+  let followedCount   = 0;  // كم هدف ضغط عليه المستخدم غير المسجَّل من اللائحة
+  let requiredFollows = 0;  // العدد المطلوب فعلياً (يتكيف مع حجم اللائحة، أقصاه 5)
+  let isNewUsername   = true; // هل الاسم المكتوب حالياً جديد كلياً (أول تسجيل) أم موجود مسبقاً (عودة)؟
 
   /* التنقل */
   function showPage(key) {
@@ -525,7 +564,39 @@
   /* Turnstile */
   function onTurnstileSuccess(token) {
     turnstileToken = token;
-    document.getElementById('reg-btn').disabled = false;
+    updateRegisterGate();
+  }
+
+  /* بوابة المتابعة الإجبارية قبل أول تسجيل — تتحكم مركزياً بحالة زر التسجيل.
+     تنطبق فقط على أسماء جديدة كلياً (أول تسجيل)؛ اسم موجود مسبقاً (عودة
+     لحساب بعد تسجيل خروج مثلاً) يتجاوز الشرط تماماً — يُحدَّد isNewUsername
+     من التحقق الحي (/api/check) أثناء الكتابة. تشترط أيضاً اجتياز Turnstile،
+     وrequiredFollows يتكيف مع حجم اللائحة الفعلي (لا يتعطل الموقع أبداً لو
+     كان عدد المستخدمين المسجَّلين أقل من 5 — حتى لو صفر) */
+  function updateRegisterGate() {
+    const btn  = document.getElementById('reg-btn');
+    const note = document.getElementById('follow-gate-note');
+    if (!btn || !note) return;
+
+    const gateApplies = isNewUsername && requiredFollows > 0;
+    const followsDone = !gateApplies || followedCount >= requiredFollows;
+    btn.disabled = !(turnstileToken && followsDone);
+
+    if (!gateApplies) {
+      // إما اسم موجود مسبقاً (عودة، لا حاجة لأي شرط) أو لا يوجد أي هدف بعد
+      // (أول مستخدم بالموقع) — بالحالتين لا داعي لأي شرط متابعة
+      note.style.display = 'none';
+      return;
+    }
+
+    note.style.display = 'block';
+    if (followsDone) {
+      note.classList.add('done');
+      note.innerHTML = '<svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6"/></svg> أحسنت! أكملت المتابعة، يمكنك التسجيل الآن';
+    } else {
+      note.classList.remove('done');
+      note.innerText = `تابع كل الحسابات بالأعلى أولاً قبل التسجيل (${followedCount}/${requiredFollows})`;
+    }
   }
 
   /* عداد */
@@ -537,7 +608,7 @@
       const d2 = Math.floor(ms / 86400000);
       const h2 = Math.floor((ms % 86400000) / 3600000);
       const m2 = Math.floor((ms % 3600000) / 60000);
-      el.innerText = `⏳ يتجدد خلال: ${d2}ي ${h2}س ${m2}د`;
+      el.innerHTML = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> يتجدد خلال: ${d2}ي ${h2}س ${m2}د`;
       ms -= 1000;
     }
     upd(); setInterval(upd, 1000);
@@ -557,6 +628,11 @@
     const hint = document.getElementById('input-hint');
     hint.className = 'hint'; hint.innerText = '';
     clearTimeout(checkTimer);
+    // افتراض متحفظ فوري إلى حين تأكيد الاستجابة: نعتبره "أول تسجيل" (يتطلب
+    // إكمال المتابعة) — أأمن من الافتراض العكسي، لأنه لا يسمح لأي مستخدم
+    // جديد بتجاوز الشرط بسبب فجوة توقيت بسيطة أثناء انتظار التحقق
+    isNewUsername = true;
+    updateRegisterGate();
     if (!e.target.value) return;
     const err = validate(e.target.value);
     if (err) { hint.className = 'hint invalid'; hint.innerText = err; return; }
@@ -566,7 +642,16 @@
         const d   = await res.json();
         hint.className = d.exists ? 'hint invalid' : 'hint valid';
         hint.innerText = d.exists ? '✗ مستخدم بالفعل' : '✓ متاح';
-      } catch { hint.className = 'hint invalid'; hint.innerText = 'فشل التحقق'; }
+        // مستخدم موجود مسبقاً = عودة لحساب، وليس أول تسجيل — لا يُطلب منه
+        // إكمال متابعة اللائحة إطلاقاً، بغض النظر عن حالة التقدم الحالية
+        isNewUsername = !d.exists;
+        updateRegisterGate();
+      } catch {
+        hint.className = 'hint invalid'; hint.innerText = 'فشل التحقق';
+        // فشل التحقق نفسه: نبقى على الافتراض المتحفظ (أول تسجيل) حفاظاً على الأمان
+        isNewUsername = true;
+        updateRegisterGate();
+      }
     }, 500);
   });
 
@@ -580,6 +665,17 @@
   function setUserPill(u) {
     const p = document.getElementById('user-pill');
     p.innerText = '@' + u; p.classList.add('show');
+    document.getElementById('logout-btn').classList.add('show');
+  }
+
+  /* تسجيل الخروج — يمسح الاسم المحفوظ محلياً ويعيد الموقع لحالة "غير مسجَّل" */
+  function logout() {
+    const btn = document.getElementById('logout-btn');
+    if (btn.disabled) return; // منع أي نقر مزدوج أثناء المعالجة
+    if (!confirm('تنبيه مهم:\n\nالموقع لا يستخدم كلمة مرور — بعد تسجيل الخروج لن تتمكن من الرجوع لنفس الحساب مرة أخرى من هذا الجهاز أو أي جهاز آخر.\n\nهل أنت متأكد من رغبتك بتسجيل الخروج؟')) return;
+    btn.disabled = true;
+    localStorage.removeItem('myUsername');
+    location.reload();
   }
 
   /* التهيئة */
@@ -592,11 +688,11 @@
 
       if (data.topGold) {
         document.getElementById('top-gold-name').innerText   = '@' + data.topGold.username;
-        document.getElementById('top-gold-points').innerText = data.topGold.gold_points_weekly + ' 💎';
+        document.getElementById('top-gold-points').innerText = data.topGold.gold_points_weekly;
       }
       if (data.topSilver) {
         document.getElementById('top-silver-name').innerText   = '@' + data.topSilver.username;
-        document.getElementById('top-silver-points').innerText = data.topSilver.silver_points_weekly + ' ✨';
+        document.getElementById('top-silver-points').innerText = data.topSilver.silver_points_weekly;
       }
 
       if (saved) {
@@ -619,7 +715,7 @@
       renderTargets(data);
     } catch(e) {
       console.error('Init error:', e);
-      document.getElementById('reset-timer').innerText = '⚠️ فشل الاتصال';
+      document.getElementById('reset-timer').innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3.5L21.5 20h-19z"/><path d="M12 9.5v4.5"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg> فشل الاتصال';
       if (saved) {
         document.getElementById('already-registered').style.display = 'block';
         document.getElementById('existing-link').value = buildRefLink(saved);
@@ -635,31 +731,41 @@
   function renderTargets(data) {
     const list = document.getElementById('targets-list');
     list.innerHTML = '';
+
+    // تصفير التقدم مع كل تحميل جديد للائحة، وحساب العدد المطلوب فعلياً —
+    // Math.min مع طول اللائحة الفعلي يضمن عدم تعطّل التسجيل أبداً لو كان
+    // عدد المستخدمين المسجَّلين بالموقع أقل من 5 (حتى لو صفر تماماً)
+    followedCount   = 0;
+    requiredFollows = data.targets ? Math.min(5, data.targets.length) : 0;
+    updateRegisterGate();
+
     if (!data.targets || data.targets.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-icon">🌟</div><div class="empty-text">كن أول من يسجل!</div></div>`;
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg></div><div class="empty-text">كن أول من يسجل!</div></div>`;
       return;
     }
     data.targets.forEach((u, i) => {
       const card = document.createElement('div');
       card.className = 'target-card';
       let badges = '';
-      if (i === 0) badges = `<span class="badge badge-gold">${u.gold_points_weekly} 💎</span><span class="badge badge-silver">${u.silver_points_weekly} ✨</span>`;
-      else if (i === 1) badges = `<span class="badge badge-silver">${u.silver_points_weekly} ✨</span><span class="badge badge-gold">${u.gold_points_weekly} 💎</span>`;
-      else if (i === 4) badges = `<span class="badge badge-new">🆕 جديد</span>`;
-      else badges = `<span class="badge badge-silver">${u.silver_points_weekly} ✨</span>`;
+      if (i === 0) badges = `<span class="badge badge-gold">${u.gold_points_weekly} <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)"><path d="M6.5 8L8.5 4h7l2 4-7 12z"/><path d="M6.5 8h11M9.5 8l2.5 12 2.5-12"/></svg></span><span class="badge badge-silver">${u.silver_points_weekly} <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg></span>`;
+      else if (i === 1) badges = `<span class="badge badge-silver">${u.silver_points_weekly} <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg></span><span class="badge badge-gold">${u.gold_points_weekly} <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)"><path d="M6.5 8L8.5 4h7l2 4-7 12z"/><path d="M6.5 8h11M9.5 8l2.5 12 2.5-12"/></svg></span>`;
+      else if (i === 4) badges = `<span class="badge badge-new"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg> جديد</span>`;
+      else badges = `<span class="badge badge-silver">${u.silver_points_weekly} <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg></span>`;
       card.innerHTML = `
         <div class="target-rank">${i+1}</div>
         <div class="target-body">
           <div class="target-username">@${u.username}</div>
           <div class="target-badges">${badges}</div>
         </div>
-        <div class="target-action">↗</div>`;
+        <div class="target-action"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg></div>`;
       card.onclick = () => {
         if (card.classList.contains('clicked')) return;
         card.classList.add('clicked');
         card.querySelector('.target-rank').innerText = '✓';
         card.querySelector('.target-action').innerText = '✓';
         window.open(`https://www.tiktok.com/@${u.username}`, '_blank');
+        followedCount++;
+        updateRegisterGate();
       };
       list.appendChild(card);
     });
@@ -708,11 +814,29 @@
       const done = comp.includes(t);
       const item = document.createElement('div');
       item.className = 'challenge-item' + (done ? ' completed' : '');
-      item.innerHTML = `<div class="challenge-name">@${t}</div><div>${done ? '✅' : '○'}</div>`;
-      item.onclick = async () => {
+      item.innerHTML = `<div class="challenge-name">@${t}</div><div>${done ? '<svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12.5l5 5L20 6"/></svg>' : '○'}</div>`;
+      item.onclick = () => {
         if (done) return;
+        // مهم: window.open يجب أن يكون أول حركة متزامنة 100% داخل معالج
+        // النقرة، بدون أي غلاف async حولها — بعض متصفحات الأندرويد
+        // (خصوصاً المتصفحات المدمجة بتطبيقات أو Samsung Internet) تتعامل
+        // مع window.open داخل دالة async كأنها "مو نقرة مستخدم مباشرة"
+        // وتحظرها بصمت، مما يجبر المستخدم يضغط مرتين لحد ما تنجح.
         window.open(`https://www.tiktok.com/@${t}`, '_blank');
-        setTimeout(async () => {
+
+        // بدل الاعتماد الأعمى على setTimeout (يتجمّد أو يتباطأ المتصفح
+        // بتوقيته وقت ما يكون تبويب الموقع بالخلفية — بالضبط وقت ما
+        // المستخدم يكون بصفحة تيك توك)، نحسب الوقت الحقيقي المنقضي
+        // بـ Date.now() ونعتمد على Page Visibility API لإكمال العدّ
+        // الفعلي فور رجوع المستخدم للتبويب، بدل انتظار مؤقت غير موثوق.
+        const REQUIRED_MS = 7000;
+        const clickTime   = Date.now();
+        let fired         = false;
+
+        async function doMark() {
+          if (fired) return;
+          fired = true;
+          document.removeEventListener('visibilitychange', onVisible);
           try {
             await fetch(`${WORKER_URL}/api/challenge/mark`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -720,19 +844,38 @@
             });
             await loadChallenge(currentUsername);
           } catch(e) { console.error('Mark error:', e); }
-        }, 7000);
+        }
+
+        // يجدول التأشير بعد إكمال الوقت المتبقي فعلياً من REQUIRED_MS —
+        // يُستدعى أكثر من مرة أحياناً (عند العودة للتبويب أكثر من مرة)،
+        // لكن fired تضمن أن doMark لا يُنفَّذ فعلياً إلا مرة واحدة فقط
+        function scheduleRemaining() {
+          const remaining = Math.max(0, REQUIRED_MS - (Date.now() - clickTime));
+          setTimeout(doMark, remaining);
+        }
+
+        function onVisible() {
+          if (document.visibilityState === 'visible') scheduleRemaining();
+        }
+
+        document.addEventListener('visibilitychange', onVisible);
+        // احتياطي: يضمن نفس السلوك السابق (يتحقق تلقائياً بعد 7 ثوانٍ)
+        // حتى لو المتصفح لم يبدّل رؤية التبويب إطلاقاً لأي سبب
+        scheduleRemaining();
       };
       cont.appendChild(item);
     });
     btn.disabled = comp.length !== tgts.length || ch.claimed;
-    btn.innerText = ch.claimed ? '✅ تم الاستلام!' : '📦 استلم 5 نقاط فضية ✨';
+    btn.innerHTML = ch.claimed
+      ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg> تم الاستلام!'
+      : '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v9l9 5 9-5V8"/><path d="M12 13v9"/></svg> استلم 5 نقاط فضية <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg>';
   }
 
   /* استلام */
   async function claimPoints() {
     if (!currentUsername) return;
     const btn = document.getElementById('claim-button');
-    btn.disabled = true; btn.innerText = '⏳ جاري...';
+    btn.disabled = true; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> جاري...';
     try {
       const res  = await fetch(`${WORKER_URL}/api/challenge/claim`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -740,16 +883,16 @@
       });
       const data = await res.json();
       if (data.success) {
-        btn.innerText = '🎉 ' + data.message;
+        btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg> ' + data.message;
         await loadUserStats(currentUsername);
         setTimeout(() => loadChallenge(currentUsername), 1000);
       } else {
-        btn.disabled = false; btn.innerText = '📦 استلم 5 نقاط فضية ✨';
-        alert('❌ ' + (data.error || 'خطأ'));
+        btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v9l9 5 9-5V8"/><path d="M12 13v9"/></svg> استلم 5 نقاط فضية <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg>';
+        alert('✗ ' + (data.error || 'خطأ'));
       }
     } catch(e) {
-      btn.disabled = false; btn.innerText = '📦 استلم 5 نقاط فضية ✨';
-      alert('❌ فشل الاتصال');
+      btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v9l9 5 9-5V8"/><path d="M12 13v9"/></svg> استلم 5 نقاط فضية <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--silver)"><path d="M12 3l1.8 5.4H19l-4.6 3.6L16 18l-4-3-4 3 1.6-6L5 8.4h5.2z"/></svg>';
+      alert('✗ فشل الاتصال');
     }
   }
 
@@ -763,7 +906,12 @@
     const vErr = validate(inp.value.trim());
     if (vErr) { err.innerText = vErr; err.style.display = 'block'; return; }
     if (!turnstileToken) { err.innerText = 'أكمل التحقق أولاً'; err.style.display = 'block'; return; }
-    btn.disabled = true; btn.innerText = '⏳ جاري التسجيل...';
+    if (isNewUsername && requiredFollows > 0 && followedCount < requiredFollows) {
+      err.innerText = `يرجى متابعة كل الحسابات بالأعلى أولاً (${followedCount}/${requiredFollows})`;
+      err.style.display = 'block';
+      return;
+    }
+    btn.disabled = true; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> جاري التسجيل...';
     try {
       const ref  = new URLSearchParams(window.location.search).get('ref') || '';
       const res  = await fetch(`${WORKER_URL}/api/register`, {
@@ -790,11 +938,11 @@
         err.style.display = 'block';
         if (window.turnstile) turnstile.reset();
         turnstileToken = null; btn.disabled = true;
-        btn.innerText = '✅ انضم واجمع النقاط';
+        btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6"/></svg> انضم واجمع النقاط';
       }
     } catch(e) {
       err.innerText = 'فشل الاتصال بالخادم'; err.style.display = 'block';
-      btn.disabled = true; btn.innerText = '✅ انضم واجمع النقاط';
+      btn.disabled = true; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6"/></svg> انضم واجمع النقاط';
     }
   }
 
@@ -804,7 +952,11 @@
     try {
       const res  = await fetch(`${WORKER_URL}/api/leaderboard?limit=10`);
       const data = await res.json();
-      const medals = ['🥇','🥈','🥉'];
+      const medals = [
+        '<span class="medal-badge" style="color:var(--gold)">1</span>',
+        '<span class="medal-badge" style="color:var(--silver)">2</span>',
+        '<span class="medal-badge" style="color:#CD7F32">3</span>'
+      ];
       const tops   = ['top1','top2','top3'];
       let html = `<div class="lb-row lb-header"><div>#</div><div>المستخدم</div><div>النقاط</div></div>`;
       if (!data.leaderboard || data.leaderboard.length === 0) {
@@ -820,7 +972,7 @@
       }
       table.innerHTML = html;
     } catch(e) {
-      table.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">⚠️ فشل تحميل الترتيب</div>`;
+      table.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5L21.5 20h-19z"/><path d="M12 9.5v4.5"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg> فشل تحميل الترتيب</div>`;
     }
   }
 
@@ -831,7 +983,7 @@
     try {
       if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
       else { const t = document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
-      alert('✅ تم النسخ!');
+      alert('✓ تم النسخ!');
     } catch { alert('فشل النسخ'); }
   }
 

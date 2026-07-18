@@ -42,3 +42,6 @@ CREATE INDEX IF NOT EXISTS idx_users_active      ON users(last_active DESC);
 CREATE INDEX IF NOT EXISTS idx_challenges_user   ON weekly_challenges(username);
 CREATE INDEX IF NOT EXISTS idx_challenges_week   ON weekly_challenges(week_number);
 CREATE INDEX IF NOT EXISTS idx_leaderboard_week  ON weekly_leaderboard(week_number);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_week_gold   ON weekly_leaderboard(week_number, gold_points DESC);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_week_silver ON weekly_leaderboard(week_number, silver_points DESC);
+CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at DESC);
