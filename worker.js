@@ -95,13 +95,33 @@ async function pickChallengeTargets(username, env, count = 3) {
     if (picked.length >= count) return;
     const remaining  = count - picked.length;
     const excludeAll = [...new Set([...everTargeted, ...picked, username])];
-    const { clause, params } = buildNotIn(excludeAll);
-    const rows = await env.DB.prepare(
+
+    // مسار سريع (تحسين أداء): عيّنة عشوائية عبر rowid — يستخدم فهرس rowid
+    // الضمني (O(log N) للوصول لنقطة البداية) بدل ORDER BY RANDOM() الذي
+    // يفحص كل صفوف الجدول المطابقة للشرط قبل الترتيب والاختيار. يعمل ممتاز
+    // بالحالة الشائعة (قاعدة كبيرة، استبعادات قليلة نسبياً لهذا النطاق).
+    let { clause, params } = buildNotIn(excludeAll);
+    const fastRows = await env.DB.prepare(
+      `SELECT u.username FROM users u
+       WHERE u.rowid >= (ABS(RANDOM() % (SELECT MAX(rowid) FROM users)) + 1)
+         AND u.is_deleted = ? AND ${clause}
+       ORDER BY u.rowid LIMIT ?`
+    ).bind(isDeletedValue, ...params, remaining).all();
+    for (const r of fastRows.results) picked.push(r.username);
+    if (picked.length >= count) return;
+
+    // احتياط: يكمل فقط العدد الناقص (مو من الصفر) بالمسار القديم الكامل —
+    // يضمن نفس النتيجة الصحيحة 100% حتى لو المسار السريع ما كفى (قاعدة
+    // صغيرة جداً، أو صادف نطاق rowid فيه استبعادات كثيرة بهذي المحاولة)
+    const stillNeed  = count - picked.length;
+    const excludeNow = [...new Set([...excludeAll, ...picked])];
+    ({ clause, params } = buildNotIn(excludeNow));
+    const fallbackRows = await env.DB.prepare(
       `SELECT u.username FROM users u
        WHERE u.is_deleted = ? AND ${clause}
        ORDER BY RANDOM() LIMIT ?`
-    ).bind(isDeletedValue, ...params, remaining).all();
-    for (const r of rows.results) picked.push(r.username);
+    ).bind(isDeletedValue, ...params, stillNeed).all();
+    for (const r of fallbackRows.results) picked.push(r.username);
   }
 
   await fillFrom(0);                            // المستوى 1: النشيطون أولاً
@@ -247,18 +267,37 @@ export default {
         }
 
         // ── #1: أعلى ذهبية ───────────────────────────────────────────────────
-        // لو الكل عنده 0 ذهبية → نأخذ عشوائياً (RANDOM() كـ tiebreaker)
+        // تحسين أداء: مسار سريع يستعلم weekly_leaderboard مباشرة (جدول أصغر
+        // بكثير من users، ومفهرَس بـ idx_weekly_gold) بدل فحص كامل جدول
+        // users مع JOIN + COALESCE على كل صف — يحوّل التكلفة من O(N) إلى
+        // O(log N) تقريباً في الحالة الشائعة (فيه على الأقل شخص كسب ذهبية).
+        // الاحتياط (fallback) بالمنطق الأصلي الكامل يبقى فقط للحالة النادرة:
+        // لا أحد كسب أي ذهبية بعد هذا الأسبوع (بداية أسبوع جديد مثلاً).
         let rank1User = await env.DB.prepare(
-          `SELECT u.username,
-                  COALESCE(w.gold_points, 0)   AS gold_points_weekly,
-                  COALESCE(w.silver_points, 0) AS silver_points_weekly
-           FROM users u
-           LEFT JOIN weekly_leaderboard w
-             ON w.username = u.username AND w.week_number = ?
-           WHERE u.is_deleted = 0
-           ORDER BY COALESCE(w.gold_points, 0) DESC, RANDOM()
+          `SELECT w.username,
+                  w.gold_points   AS gold_points_weekly,
+                  w.silver_points AS silver_points_weekly
+           FROM weekly_leaderboard w
+           JOIN users u ON u.username = w.username AND u.is_deleted = 0
+           WHERE w.week_number = ? AND w.gold_points > 0
+           ORDER BY w.gold_points DESC
            LIMIT 1`
         ).bind(currentWeek).first();
+
+        if (!rank1User) {
+          // احتياط: لا أحد كسب ذهبية بعد — فحص شامل مع RANDOM() كـ tiebreaker
+          rank1User = await env.DB.prepare(
+            `SELECT u.username,
+                    COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                    COALESCE(w.silver_points, 0) AS silver_points_weekly
+             FROM users u
+             LEFT JOIN weekly_leaderboard w
+               ON w.username = u.username AND w.week_number = ?
+             WHERE u.is_deleted = 0
+             ORDER BY RANDOM()
+             LIMIT 1`
+          ).bind(currentWeek).first();
+        }
 
         if (rank1User) {
           finalTargets.push(rank1User);
@@ -266,21 +305,37 @@ export default {
         }
 
         // ── #2: أعلى فضية (غير #1) ──────────────────────────────────────────
-        // لو الكل عنده 0 فضية → RANDOM() كـ tiebreaker
+        // نفس تحسين الأداء: مسار سريع على weekly_leaderboard مباشرة
         let rank2User = null;
         if (used.size < total) {
-          const { clause, params } = buildNotIn([...used]);
+          const { clause: notInClauseUsers, params: notInParamsUsers } = buildNotIn([...used]);
+          const notInClauseW = notInClauseUsers.replace(/u\.username/g, 'w.username');
           rank2User = await env.DB.prepare(
-            `SELECT u.username,
-                    COALESCE(w.gold_points, 0)   AS gold_points_weekly,
-                    COALESCE(w.silver_points, 0) AS silver_points_weekly
-             FROM users u
-             LEFT JOIN weekly_leaderboard w
-               ON w.username = u.username AND w.week_number = ?
-             WHERE u.is_deleted = 0 AND ${clause}
-             ORDER BY COALESCE(w.silver_points, 0) DESC, RANDOM()
+            `SELECT w.username,
+                    w.gold_points   AS gold_points_weekly,
+                    w.silver_points AS silver_points_weekly
+             FROM weekly_leaderboard w
+             JOIN users u ON u.username = w.username AND u.is_deleted = 0
+             WHERE w.week_number = ? AND w.silver_points > 0 AND ${notInClauseW}
+             ORDER BY w.silver_points DESC
              LIMIT 1`
-          ).bind(currentWeek, ...params).first();
+          ).bind(currentWeek, ...notInParamsUsers).first();
+
+          if (!rank2User) {
+            // احتياط: لا أحد (غير #1) كسب فضية بعد — فحص شامل مع RANDOM()
+            const { clause, params } = buildNotIn([...used]);
+            rank2User = await env.DB.prepare(
+              `SELECT u.username,
+                      COALESCE(w.gold_points, 0)   AS gold_points_weekly,
+                      COALESCE(w.silver_points, 0) AS silver_points_weekly
+               FROM users u
+               LEFT JOIN weekly_leaderboard w
+                 ON w.username = u.username AND w.week_number = ?
+               WHERE u.is_deleted = 0 AND ${clause}
+               ORDER BY RANDOM()
+               LIMIT 1`
+            ).bind(currentWeek, ...params).first();
+          }
         }
 
         if (rank2User) {
